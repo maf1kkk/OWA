@@ -1,0 +1,41 @@
+{
+  "name": "owa",
+  "version": "1.1.0",
+  "description": "OWA — One-Click Web Analyzer: сбор и анализ метрик производительности веб-приложений",
+  "main": "src/engine.js",
+  "bin": {
+    "owa": "bin/owa.js"
+  },
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "start": "node web/server.js",
+    "analyze": "node bin/owa.js",
+    "test": "node --test \"test/*.test.js\"",
+    "migrate": "node scripts/migrate.js",
+    "check-env": "node scripts/check-env.js"
+  },
+  "keywords": [
+    "performance",
+    "web-vitals",
+    "playwright",
+    "lighthouse-alternative"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "12.11.1",
+    "css-tree": "^3.2.1",
+    "csstree-validator": "^4.0.1",
+    "dotenv": "^18.0.7",
+    "espree": "^11.2.0",
+    "express": "^5.3.0",
+    "html-validate": "^10.17.0",
+    "openai": "^7.32.0",
+    "pino": "^10.4.0",
+    "playwright": "^1.63.0",
+    "zod": "^4.6.5"
+  }
+}

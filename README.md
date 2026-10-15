@@ -1,0 +1,325 @@
+# OWA — One-Click Web Analyzer
+
+Автоматизированный сборщик метрик производительности веб-приложений. Вставляешь ссылку — получаешь полный отчёт в консоль, JSON или Markdown.
+
+Альтернатива ручной работе с DevTools Console (Performance API, Long Tasks, пользовательские метрики) — всё делается одной командой.
+
+## Требования
+
+- **Node.js 22.16.0 или новее** — https://nodejs.org (старше не ставим сами, только проверяем)
+- Доступ в интернет при первой установке (npm + Chromium Playwright)
+- Windows / Linux / macOS
+
+## Установка и запуск
+
+Одна команда — она сама проверит окружение и доставит недостающее:
+
+```bash
+# Windows
+start.bat
+
+# Linux / macOS
+sh start.sh
+```
+
+Что делает скрипт (идемпотентно, каждый запуск):
+
+1. `[✓]` проверяет Node.js в PATH и его версию (нет/старый → инструкция, выход)
+2. `[↓]` ставит зависимости (`npm install`), если `node_modules` нет или `package.json` изменился
+3. `[↓]` ставит Chromium Playwright в пользовательский кэш, если его нет
+   (Windows: `%LOCALAPPDATA%\ms-playwright`, Linux: `~/.cache/ms-playwright`, macOS: `~/Library/Caches/ms-playwright`)
+4. `[✓]` если `.env` нет — копирует из `.env.example` и просит заполнить (выход, ничего не сломано)
+5. `[→]` запускает сервер: `http://localhost:3210` (остановка — `Ctrl+C`)
+
+Ручная проверка окружения без установки:
+
+```bash
+npm run check-env            # только проверить
+node scripts/check-env.js --fix   # проверить и поставить недостающее
+```
+
+Если CDN Playwright недоступен (нет сети до `cdn.playwright.dev` или режет корпоративный прокси), Chromium не скачается — OWA всё равно запустится на системном Chrome или Edge (тот же движок). Канал можно зафиксировать: `OWA_BROWSER_CHANNEL=chrome` или `msedge` в `.env`.
+
+### Конфигурация (.env)
+
+При первом запуске создаётся `.env` из `.env.example`. Заполните:
+
+| Переменная | Назначение |
+|---|---|
+| `PORT` / `HOST` | порт и интерфейс сервера (`0.0.0.0` — доступен в сети) |
+| `AUTH_LOGIN` / `AUTH_PASSWORD_HASH` | Basic Auth (bcrypt-хэш пароля) |
+| `API_BEARER_TOKEN` | Bearer-токен для API |
+| `GLM_API_KEY`, `GLM_BASE_URL`, `GLM_MODEL` | доступ к LLM (OpenAI-совместимый endpoint), см. раздел «AI-объяснения» |
+| `GLM_TIMEOUT_MS`, `GLM_MAX_TOKENS`, `GLM_TEMPERATURE` | таймаут AI-вызова (по умолч. 30000) и параметры генерации |
+| `OWA_BROWSER_CHANNEL` | пусто (по умолчанию) — Chromium из кэша Playwright, при его отсутствии системный Chrome, затем Edge; либо явно `chrome` / `msedge` |
+
+Сгенерировать bcrypt-хэш пароля:
+
+```bash
+node -e "require('bcrypt').hash('ВАШ_ПАРОЛЬ', 10, (e,h)=>console.log(h))"
+```
+
+`.env` не попадает в git.
+
+## Использование (CLI)
+
+```bash
+# Базовый анализ — отчёт в консоль
+node bin/owa.js https://lolesports.com
+
+# Сохранить отчёты
+node bin/owa.js https://example.com --out report.json --md report.md
+
+# Пользовательская метрика: время до появления виджета (можно несколько селекторов)
+node bin/owa.js https://lolesports.com --selector "#match-widget" --selector "#scoreboard"
+
+# Машинночитаемый вывод для ИИ-агентов (opencode и т.п.)
+node bin/owa.js https://example.com --json
+
+# Минимум токенов: компактный JSON с готовой интерпретацией (для ИИ)
+node bin/owa.js https://example.com --compact
+
+# Видимый браузер + перехват console-логов страницы
+node bin/owa.js https://example.com --headed --console
+```
+
+### Все опции CLI
+
+| Опция | Описание |
+|---|---|
+| `--json` | Только JSON-вывод (для ИИ-агентов) |
+| `--compact` | Компактный JSON с готовой интерпретацией (минимум токенов для ИИ) |
+| `--out <файл>` | Сохранить полный JSON-отчёт |
+| `--md <файл>` | Сохранить Markdown-отчёт (готовая таблица для лабораторной) |
+| `--selector <sel>` | Селектор виджета для пользовательской метрики (повторяемо) |
+| `--wait <мс>` | Ожидание после `load` (по умолч. 5000) — для динамического контента |
+| `--timeout <мс>` | Таймаут навигации (по умолч. 60000) |
+| `--headed` | Показать окно браузера |
+| `--console` | Перехватить console-сообщения страницы |
+| `--code` | Добавить в отчёт статический анализ кода (CSS/HTML/JS) |
+
+### Exit-коды (для автоматизации)
+
+- `0` — метрики в норме
+- `1` — есть проблемы (load > 5 с, > 5 долгих задач, LCP > 4 с, либо ошибки статанализа с `--code`)
+- `2` — ошибка анализа
+
+## Что собирается
+
+### Performance API (шаг 2 лабораторной)
+- Полное время загрузки (`performance.timing.loadEventEnd - navigationStart`)
+- Время до `DOMContentLoaded`
+- `performance.getEntriesByType('navigation')` — DNS, TCP, SSL, TTFB, DOM interactive/complete
+- `performance.getEntriesByType('resource')` — все ресурсы: количество, группировка по типу, топ-5 тяжёлых, топ-10 медленных
+
+### Пользовательские метрики (шаг 3)
+- Время (мс от начала навигации) до появления заданного селектора — чат, таблица результатов, виджет матча
+- Авто-детект вероятных динамических виджетов (`#match-widget`, `#scoreboard`, `.chat`, `[class*="live"]` и т.п.), если селекторы не заданы
+
+### Long Tasks (шаг 4)
+- Количество задач > 50 мс, максимальная длительность, attribution (какой скрипт виноват)
+- Оценка Total Blocking Time
+
+### Дополнительно
+- Core Web Vitals: LCP, CLS
+- First Paint / First Contentful Paint
+- JS-ошибки на странице
+- Память JS Heap (Chrome)
+- Опционально: console-логи страницы
+
+## Интерпретация без галлюцинаций (для ИИ-агентов)
+
+Все вердикты и рекомендации вычисляются **в самом приложении** детерминированными правилами (`src/interpret.js`) — ИИ не нужно ничего «додумывать». ИИ остаётся только пересказать готовые выводы.
+
+Три способа подключения ИИ, от простого к правильному:
+
+**1. `--json`** — полный машиночитаемый отчёт, включая блок `interpretation`:
+```bash
+node bin/owa.js https://site.com --json
+```
+
+**2. `--compact`** — сверхкомпактный вывод со стабильной схемой (`schemaVersion: 1`), готовой интерпретацией и минимумом токенов (нет сырых массивов ресурсов и задач):
+```bash
+node bin/owa.js https://site.com --compact
+```
+
+**3. MCP-сервер (рекомендуется)** — ИИ получает OWA как встроенный инструмент `analyze_url`. Вызвать tool дешевле и надёжнее, чем галлюцинировать метрики «из памяти». Подключение в `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "owa": {
+        "type": "local",
+        "command": ["node", "mcp/server.js"],
+        "cwd": "."
+      }
+    }
+  }
+}
+```
+
+После этого агент сам вызовет `analyze_url` с аргументами `{ url, selectors?, waitMs? }` и получит проверенные измерения с вердиктами — экономия токенов и ноль выдуманных данных.
+
+## Структура
+
+```
+start.bat / start.sh       Идемпотентный запуск: проверка окружения + установка
+scripts/check-env.js       Проверка Node/зависимостей/Chromium/.env (+ --fix)
+scripts/migrate.js         Применение миграций SQLite вручную
+bin/owa.js                 CLI
+src/engine.js              Движок: запуск браузера, оркестрация сборщиков
+src/report.js              Консольный и Markdown-рендер (+ секция статанализа)
+src/interpret.js           Детерминированная интерпретация (verdict/recommendation)
+src/static-analyzer/
+  index.js                 Оркестрация: analyzeCode (за раз) и сессии (продолжение)
+  fetch-sources.js         Сбор HTML/CSS/JS через Playwright (лимиты ТЗ)
+  css-rules.js             Правила CSS (!important, дубли, неиспользуемые, ...)
+  html-rules.js            Правила HTML (lang, alt, дубли id, deprecated)
+  js-rules.js              Правила JS (console, debugger, eval, размер)
+  validators.js            Обёртки: csstree-validator, html-validate, espree
+  to-findings.js           Raw -> формат findings (+ severity, rule, location, suggestion)
+src/ai/
+  client.js                Клиент GLM через SDK openai (таймаут 30 с, retry 1× на 5xx)
+  explain.js               Промпт находки, sha256-кэш в ai_responses, explainMissing
+  index.js                 Ленивая конфигурация GLM_* из .env (getAi/resetAi)
+src/db/
+  index.js                 Открытие SQLite, PRAGMA (WAL), миграции по user_version
+  migrations/001_init.sql  Схема: analyses, code_findings, ai_responses, settings
+  migrations/002_code_sessions.sql  Сессии статанализа (продолжение анализа)
+  repositories/            Тонкие обёртки над prepared statements
+mcp/server.js              MCP-сервер (stdio): инструмент analyze_url для ИИ-агентов
+web/
+  server.js                Точка входа: .env, БД, listen
+  app.js                   Фабрика Express-приложения
+  routes/api.js            HTTP API (см. раздел «HTTP API»)
+  routes/code-analysis.js  POST /api/code-analysis (сессии статанализа)
+  routes/ai.js             POST /api/ai/explain (AI-объяснения находок)
+  middleware/validate.js   zod-валидация и формат ошибок { error, message }
+  index.html               UI
+test/                      Тесты (node --test)
+src/collectors/
+  performance.js           Navigation/Resource/Paint timing
+  longtasks.js             PerformanceObserver longtask
+  widget.js                Пользовательские метрики виджетов
+  vitals.js                LCP/CLS/ошибки/память
+```
+
+## HTTP API
+
+Сервер: `npm start` (или `start.bat`). Настройки — из `.env` (`PORT`, `HOST`).
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| `GET` | `/` | UI |
+| `GET` | `/health` | `{ status, version, uptime }` |
+| `GET` | `/api/health` | `{ ok, tool }` (для UI) |
+| `POST` | `/api/analyze` | Синхронный анализ: `{ url, selectors?, waitMs?, timeoutMs?, headed?, consoleLogs?, compact?, save? }` → `{ ok, report, compact?, analysisId }`. `save: false` — не сохранять в историю |
+| `POST` | `/api/code-analysis` | Статический анализ кода с продолжением: `{ url }` → первая сессия, `{ sessionId, explain? }` → следующий батч, см. раздел «Статический анализ кода» |
+| `POST` | `/api/ai/explain` | AI-объяснения находок: `{ analysisId, force? }` → `{ ok, findings, explained, cached }`, см. раздел «AI-объяснения» |
+| `GET` | `/api/history?limit&offset&url` | Список анализов: `{ ok, items, total }` |
+| `GET` | `/api/history/:id` | Детали анализа (+ `codeFindings`) |
+| `DELETE` | `/api/history/:id` | Удалить запись (каскадно) |
+| `DELETE` | `/api/history` | Очистить историю целиком |
+
+Ошибки — всегда JSON вида `{ error: CODE, message: string }` + корректный HTTP-статус.
+
+Пример для ИИ-агента:
+
+```bash
+curl -X POST http://localhost:3210/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}'
+```
+
+## Статический анализ кода
+
+Два способа запуска:
+
+**CLI** — одной командой с метриками:
+
+```bash
+node bin/owa.js https://example.com --code          # + секция «Статический анализ кода» в отчёте
+node bin/owa.js https://example.com --code --json   # поле codeFindings в JSON
+```
+
+**HTTP** — сессии с продолжением (каждый вызов делает очередной шаг и сохраняет
+прогресс в SQLite, можно продолжить позже — как «продолжение диалога»):
+
+```bash
+# 1) создать сессию: сбор исходников (fetch) + анализ HTML
+curl -X POST http://localhost:3210/api/code-analysis \
+  -H "Content-Type: application/json" -d '{"url":"https://example.com"}'
+# -> { sessionId, step: "css", done: false, findings: [...] }
+
+# 2) продолжать, пока done не станет true (следующий батч CSS/JS, batch по умолч. 10 файлов)
+curl -X POST http://localhost:3210/api/code-analysis \
+  -H "Content-Type: application/json" -d '{"sessionId": 1}'
+# -> ... { step: "js", done: false } / { done: true, summary: {...} }
+```
+
+Что проверяется:
+
+| Тип | Правила |
+|---|---|
+| CSS | синтаксис (csstree-validator), счётчик `!important`, дубли селекторов, неиспользуемые селекторы (сверка с HTML), пустые правила, файл > 5000 строк |
+| HTML | нет `lang`, `<img>` без `alt`, дубли `id`, deprecated-теги, синтаксис/структура (html-validate) |
+| JS | `console.*`/`debugger` (счётчик), `eval`/`new Function`, файл > 500 КБ, синтаксис (espree) |
+
+Лимиты (ТЗ): до 50 внешних файлов и 2 МБ на файл — что не влезло, попадает в
+`truncated` с причиной. Находки выдаются в формате `findings` из `interpret.js`
+(+ аддитивные поля `severity`, `rule`, `location`, `suggestion`), привязываются к
+записи в истории и удаляются каскадно вместе с ней.
+
+## AI-объяснения (GLM 4.5)
+
+Модуль `src/ai/` — объяснение находок статанализа через OpenAI-совместимый API
+(официальный SDK `openai`, модель `glm-4.5`, endpoint в `GLM_BASE_URL`):
+
+- **таймаут 30 с** (`GLM_TIMEOUT_MS`), **retry ровно 1 раз только на 5xx**;
+- ошибки нормализуются: `{ error: 'AI_TIMEOUT' }` (HTTP 504) или
+  `{ error: 'AI_ERROR' }` (HTTP 502); нет ключа — `400 AI_NOT_CONFIGURED`;
+- **кэш в SQLite**: ключ `sha256(model + prompt)` в таблице `ai_responses` —
+  повторный запрос тех же данных отдаётся из кэша без обращения к LLM;
+- промпты и ответы LLM не логируются, ключ — только в `.env` (в git не попадает).
+
+Два способа получить объяснения:
+
+```bash
+# 1) сразу при анализе: флаг explain в /api/code-analysis (объясняет все находки
+#    без ai_explanation, в ответе — блок ai { configured, explained, cached })
+curl -X POST http://localhost:3210/api/code-analysis \
+  -H "Content-Type: application/json" -d '{"url":"https://example.com","explain":true}'
+
+# 2) отдельно по готовому анализу из истории (force: true — переобъяснить всё,
+#    но повторные тексты всё равно берутся из кэша)
+curl -X POST http://localhost:3210/api/ai/explain \
+  -H "Content-Type: application/json" -d '{"analysisId": 1}'
+```
+
+Объяснение сохраняется в `code_findings.ai_explanation` и возвращается в поле
+`aiExplanation` у находки. Ошибка AI не прерывает анализ: в ответе появляется
+`ai.error`, повторный вызов дозаполняет остаток (успешное уже сохранено).
+
+## База данных
+
+SQLite (`better-sqlite3`) в `data/owa.db` (каталог создаётся сам, в git не попадает):
+
+- режим **WAL**, `foreign_keys = ON` — включаются при открытии;
+- миграции — SQL-файлы `src/db/migrations/NNN_*.sql`, применяются по `PRAGMA user_version` при старте сервера;
+- вручную: `npm run migrate`;
+- таблицы: `analyses` (история), `code_findings` (находки статанализа, каскад), `code_sessions` (прогресс сессий статанализа), `ai_responses` (кэш LLM), `settings`.
+
+## Тесты
+
+```bash
+npm test                              # все тесты
+node --test test/interpret.test.js    # правила интерпретации
+node --test test/cli.test.js          # CLI (есть сетевые тесты)
+node --test test/mcp.test.js          # MCP-сервер (есть сетевые тесты)
+```
+
+76 тестов: граничные случаи, стабильность схемы JSON, обработка недоступных сайтов / невалидных URL / несуществующих селекторов, живучесть MCP-сервера, миграции и репозитории SQLite, HTTP-роуты (история, валидация, формат ошибок), правила статанализа CSS/HTML/JS, полный цикл сессий `POST /api/code-analysis` и AI-слой (кэш, retry на 5xx, таймаут, коды ошибок) на мок-сервере GLM.
+
+> Сетевые тесты CLI/MCP требуют установленного Chromium (`npx playwright install chromium`) — `start.bat` делает это сам.

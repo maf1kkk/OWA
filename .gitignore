@@ -1,0 +1,25 @@
+# --- Зависимости ---
+node_modules/
+
+# --- Секреты и локальные данные ---
+.env
+data/
+logs/
+
+# --- Артефакты лабораторных / временные отчёты (ранее покрывались правилом *.json) ---
+report.json
+report_*.json
+
+# --- Личные/лабораторные материалы, не относящиеся к продукту ---
+check.txt
+check2.txt
+console_view.html
+
+# --- Служебное ---
+*.log
+.DS_Store
+Thumbs.db
+
+# --- Артефакты MCP-серверов разработки (playwright / chrome-devtools MCP) ---
+.playwright-mcp/
+.chrome-devtools-mcp/

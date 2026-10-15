@@ -1,0 +1,69 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "context7": {
+        "type": "remote",
+        "url": "https://mcp.context7.com/mcp"
+      },
+      "playwright": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "@playwright/mcp@latest",
+          "--browser",
+          "msedge"
+        ],
+        "timeout": {
+          "startup": 120000
+        }
+      },
+      "chrome-devtools": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "chrome-devtools-mcp@latest",
+          "--executable-path",
+          "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+          "--headless",
+          "--isolated",
+          "--workspace",
+          ".",
+          "--no-usage-statistics"
+        ],
+        "timeout": {
+          "startup": 120000
+        }
+      },
+      "memory": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "@modelcontextprotocol/server-memory"
+        ]
+      },
+      "sequential-thinking": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "@modelcontextprotocol/server-sequential-thinking"
+        ]
+      },
+      "owa": {
+        "type": "local",
+        "command": [
+          "node",
+          "mcp/server.js"
+        ],
+        "cwd": ".",
+        "timeout": {
+          "execution": 180000
+        }
+      }
+    }
+  }
+}
