@@ -12,16 +12,20 @@ const { createRepos } = require('../src/db/repositories');
 const { createApiRouter } = require('./routes/api');
 const { createCodeAnalysisRouter } = require('./routes/code-analysis');
 const { createAiRouter } = require('./routes/ai');
-const { errorHandler, notFoundHandler } = require('./middleware/validate');
+const { errorHandler, notFoundHandler, HttpError } = require('./middleware/validate');
+const { requireAuth, attachHeader } = require('./middleware/auth');
+const { createAuth } = require('./auth');
 
 const INDEX_HTML = path.join(__dirname, 'index.html');
 
-function createApp({ db }) {
+function createApp({ db, auth }) {
   const repos = createRepos(db);
   const app = express();
 
   app.disable('x-powered-by');
   app.use(express.json({ limit: '1mb' }));
+  app.use(securityHeaders);
+  app.use(requireAuth(auth));
 
   app.use(createApiRouter({ repos }));
   app.use(createCodeAnalysisRouter({ repos }));
@@ -34,10 +38,27 @@ function createApp({ db }) {
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
   app.use(notFoundHandler);
-  app.use(errorHandler);
+  // Express 5: 4-аргументный обработчик считается error handler'ом
+  app.use((err, req, res, _next) => {
+    // 401 требует WWW-Authenticate, иначе браузер не покажет форму входа
+    if (err && err.status === 401) attachHeader(res, err);
+    errorHandler(err, req, res, _next);
+  });
 
   app.locals.repos = repos;
+  app.locals.auth = auth;
   return app;
 }
 
-module.exports = { createApp };
+/**
+ * Базовая защита отклика/кликджекинга. Полноценный CSP — на UI,
+ * который отдаёт только index.html без внешних ресурсов.
+ */
+function securityHeaders(_req, res, next) {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Frame-Options', 'DENY');
+  res.set('Referrer-Policy', 'no-referrer');
+  next();
+}
+
+module.exports = { createApp, createAuth, HttpError };

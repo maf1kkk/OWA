@@ -54,20 +54,24 @@ const validateParams = (schema) => (req, _res, next) => {
 /** Express 5 сам передаёт rejected promise в error-handler. */
 function errorHandler(err, _req, res, _next) {
   if (err instanceof HttpError) {
+    if (err.wwwAuthenticate) res.set('WWW-Authenticate', err.wwwAuthenticate);
     return res.status(err.status).json({ error: err.code, message: err.message });
   }
   // express.json(): невалидный JSON тела
   if (err && err.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'INVALID_JSON', message: 'Невалидный JSON' });
   }
+  // слишком большое тело
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE', message: 'Тело запроса слишком велико' });
+  }
   if (err && err.status && err.status < 500) {
     return res.status(err.status).json({ error: 'BAD_REQUEST', message: err.message });
   }
-  // В проде здесь будет pino (итерация 6); stderr — не содержит секретов
-  console.error('[error]', err);
-  return res
-    .status(500)
-    .json({ error: 'INTERNAL', message: String((err && err.message) || err) });
+  // Детали внутренних ошибок — только в лог, наружу нейтральный ответ,
+  // иначе через message утекают пути, SQL и стектрейсы Playwright.
+  console.error('[error]', err && err.stack ? err.stack : err);
+  res.status(500).json({ error: 'INTERNAL', message: 'Внутренняя ошибка сервера' });
 }
 
 function notFoundHandler(_req, res) {

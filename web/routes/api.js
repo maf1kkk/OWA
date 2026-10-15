@@ -15,6 +15,7 @@ const express = require('express');
 const { z } = require('zod');
 const { analyze } = require('../../src/engine');
 const { buildCompact } = require('../../src/interpret');
+const { checkTargetUrl } = require('../../src/security');
 const {
   HttpError,
   validateBody,
@@ -24,9 +25,14 @@ const {
 
 const VERSION = require('../../package.json').version;
 
+// Сколько анализов считаем разумным максимумом параллельно: каждый — отдельный
+// Chromium с сотнями МБ памяти. Дальше — 429 вместо падения по OOM.
+const MAX_CONCURRENT = Number(process.env.OWA_MAX_CONCURRENT ?? 2);
+
 const analyzeSchema = z.object({
   url: z.string().min(1, 'URL обязателен'),
-  selectors: z.array(z.string()).optional(),
+  // лимиты: каждый селектор — querySelector на странице
+  selectors: z.array(z.string().max(200)).max(20).optional(),
   waitMs: z.coerce.number().int().optional(),
   timeoutMs: z.coerce.number().int().optional(),
   headed: z.boolean().optional(),
@@ -49,14 +55,25 @@ const idParamSchema = z.object({
 const clamp = (v, min, max, dflt) =>
   Number.isFinite(v) ? Math.min(Math.max(v, min), max) : dflt;
 
-/** URL анализа: http(s):// включая localhost, 127.0.0.1, file:// (ТЗ 7.3). */
+/** URL анализа: http(s)://, но не приватные адреса (SSRF/LFI). */
 function isValidTarget(url) {
-  return /^(https?|file):\/\//i.test(url);
+  const verdict = checkTargetUrl(url);
+  if (verdict.ok) return true;
+  throw new HttpError(400, 'INVALID_URL', reasonMessage(verdict));
+}
+
+function reasonMessage(verdict) {
+  if (verdict.reason === 'scheme') return 'URL должен начинаться с http:// или https://';
+  if (verdict.reason === 'private') {
+    return 'Приватные/локальные адреса запрещены (OWA_ALLOW_PRIVATE_TARGETS=1 — отключить проверку)';
+  }
+  return 'Некорректный URL';
 }
 
 function createApiRouter({ repos }) {
   const router = express.Router();
   const running = new Set();
+  let inFlight = 0;
 
   // ------------------------------------------------------------ health
   router.get('/health', (_req, res) => {
@@ -72,14 +89,17 @@ function createApiRouter({ repos }) {
     const body = req.valid;
     const url = body.url.trim();
 
-    if (!isValidTarget(url)) {
-      throw new HttpError(400, 'INVALID_URL', 'URL должен начинаться с http:// или https://');
-    }
+    isValidTarget(url);
+
     if (running.has(url)) {
       throw new HttpError(409, 'ALREADY_RUNNING', 'Этот URL уже анализируется');
     }
+    if (inFlight >= MAX_CONCURRENT) {
+      throw new HttpError(429, 'TOO_MANY_REQUESTS', 'Слишком много одновременных анализов, попробуйте позже');
+    }
 
     running.add(url);
+    inFlight += 1;
     const startedAt = Date.now();
     const save = body.save !== false;
 
@@ -90,7 +110,9 @@ function createApiRouter({ repos }) {
         widgetSelectors: Array.isArray(body.selectors) && body.selectors.length
           ? body.selectors.map(String)
           : null,
-        headless: body.headed !== true,
+        // headed через API — только локально и только с явным разрешением:
+        // иначе команда из сети открывает окно браузера на машине сервера
+        headless: !(body.headed === true && process.env.OWA_ALLOW_HEADED === '1'),
         consoleLogs: body.consoleLogs === true,
       });
       const compact = body.compact === true ? buildCompact(data) : undefined;
@@ -110,7 +132,7 @@ function createApiRouter({ repos }) {
 
       return res.json({ ok: true, report: data, compact, analysisId });
     } catch (err) {
-      const message = String((err && err.message) || err);
+      const message = 'Анализ не удался';
       if (save) {
         try {
           repos.analyses.insert({
@@ -122,11 +144,16 @@ function createApiRouter({ repos }) {
             summary: { status: 'error', score: 0, headline: message },
             status: 'error',
           });
-        } catch { /* не маскируем основную ошибку */ }
+        } catch (dbErr) {
+          console.error('[history] не удалось сохранить ошибку анализа:', dbErr && dbErr.message);
+        }
       }
+      // В историю и наружу — нейтральное сообщение: в err.message от Playwright
+      // бывают полные URL и внутрисистемные детали.
       throw new HttpError(500, 'ANALYSIS_FAILED', message);
     } finally {
       running.delete(url);
+      inFlight -= 1;
     }
   });
 

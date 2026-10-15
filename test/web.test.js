@@ -5,14 +5,15 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { openDb, migrate } = require('../src/db');
-const { createApp } = require('../web/app');
+const { createApp, createAuth } = require('../web/app');
 
 /** Поднять приложение на эфемерном порту. */
-async function startApp() {
+async function startApp(env = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'owa-web-test-'));
   const db = openDb(path.join(dir, 'test.db'));
   migrate(db);
-  const app = createApp({ db });
+  const auth = createAuth(env);
+  const app = createApp({ db, auth });
   const server = await new Promise((resolve) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
   });
@@ -20,6 +21,7 @@ async function startApp() {
   return {
     base,
     db,
+    auth,
     repos: app.locals.repos,
     stop: () =>
       new Promise((resolve) => server.close(() => {
@@ -28,6 +30,11 @@ async function startApp() {
         resolve();
       })),
   };
+}
+
+/** Заголовок Basic из пары логин/пароль. */
+function basicHeader(login, password) {
+  return { Authorization: 'Basic ' + Buffer.from(`${login}:${password}`, 'utf8').toString('base64') };
 }
 
 test('GET /health -> { status, version, uptime }', async () => {
@@ -206,6 +213,108 @@ test('неизвестный роут -> 404 в формате { error, message 
     const body = await r.json();
     assert.strictEqual(body.error, 'NOT_FOUND');
     assert.ok(body.message);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+// --- авторизация -----------------------------------------------------------
+
+test('auth: без настройки всё открыто (приватный режим)', async () => {
+  const ctx = await startApp({});
+  try {
+    assert.equal(ctx.auth.public, true);
+    const r = await fetch(`${ctx.base}/api/history`);
+    assert.strictEqual(r.status, 200);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('auth: Basic — без заголовка 401 + WWW-Authenticate', async () => {
+  const bcrypt = require('bcrypt');
+  const hash = await bcrypt.hash('secret123', 10);
+  const ctx = await startApp({ AUTH_LOGIN: 'admin', AUTH_PASSWORD_HASH: hash });
+  try {
+    const r = await fetch(`${ctx.base}/api/history`);
+    assert.strictEqual(r.status, 401);
+    assert.strictEqual(r.headers.get('www-authenticate'), 'Basic realm="OWA", charset="UTF-8"');
+    assert.strictEqual((await r.json()).error, 'UNAUTHORIZED');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('auth: Basic — верная пара проходит', async () => {
+  const bcrypt = require('bcrypt');
+  const hash = await bcrypt.hash('secret123', 10);
+  const ctx = await startApp({ AUTH_LOGIN: 'admin', AUTH_PASSWORD_HASH: hash });
+  try {
+    const r = await fetch(`${ctx.base}/api/history`, { headers: basicHeader('admin', 'secret123') });
+    assert.strictEqual(r.status, 200);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('auth: неверный пароль не проходит', async () => {
+  const bcrypt = require('bcrypt');
+  const hash = await bcrypt.hash('secret123', 10);
+  const ctx = await startApp({ AUTH_LOGIN: 'admin', AUTH_PASSWORD_HASH: hash });
+  try {
+    const r = await fetch(`${ctx.base}/api/history`, { headers: basicHeader('admin', 'wrong') });
+    assert.strictEqual(r.status, 401);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('auth: /health открыт даже под паролем', async () => {
+  const bcrypt = require('bcrypt');
+  const hash = await bcrypt.hash('secret123', 10);
+  const ctx = await startApp({ AUTH_LOGIN: 'admin', AUTH_PASSWORD_HASH: hash });
+  try {
+    const r = await fetch(`${ctx.base}/health`);
+    assert.strictEqual(r.status, 200);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('auth: Bearer для /api/* — верный токен проходит, неверный 401', async () => {
+  const ctx = await startApp({ API_BEARER_TOKEN: 'tok-abc' });
+  try {
+    const ok = await fetch(`${ctx.base}/api/history`, { headers: { Authorization: 'Bearer tok-abc' } });
+    assert.strictEqual(ok.status, 200);
+
+    const no = await fetch(`${ctx.base}/api/history`);
+    assert.strictEqual(no.status, 401);
+    assert.strictEqual((await no.json()).error, 'UNAUTHORIZED');
+
+    const bad = await fetch(`${ctx.base}/api/history`, { headers: { Authorization: 'Bearer nope' } });
+    assert.strictEqual(bad.status, 401);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('auth: битый bcrypt-хэш не пускает и не роняет сервер', async () => {
+  const ctx = await startApp({ AUTH_LOGIN: 'admin', AUTH_PASSWORD_HASH: 'not-a-hash' });
+  try {
+    const r = await fetch(`${ctx.base}/api/history`, { headers: basicHeader('admin', 'secret123') });
+    assert.strictEqual(r.status, 401);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('headers: базовые security-заголовки выставлены', async () => {
+  const ctx = await startApp({});
+  try {
+    const r = await fetch(`${ctx.base}/health`);
+    assert.strictEqual(r.headers.get('x-content-type-options'), 'nosniff');
+    assert.strictEqual(r.headers.get('x-frame-options'), 'DENY');
+    assert.strictEqual(r.headers.get('referrer-policy'), 'no-referrer');
   } finally {
     await ctx.stop();
   }

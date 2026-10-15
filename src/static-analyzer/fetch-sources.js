@@ -1,14 +1,16 @@
 /**
  * Сбор исходников страницы для статического анализа.
  * Через Playwright: открываем страницу, забираем HTML, инлайновые style/script
- * и внешние CSS/JS (скачивание через context.request; file:// — с диска).
+ * и внешние CSS/JS (скачивание через context.request).
  * Лимиты (ТЗ): не более 50 внешних файлов и 2 МБ на файл; всё сверху — в truncated.
+ *
+ * Безопасность: внешние ресурсы качаем только с того же origin, что и страница,
+ * и только по http(s) — см. src/security.js, уровень 2. Страница не может
+ * заставить сервить произвольные внутренние адреса или прочитать file://.
  */
 'use strict';
 
-const fs = require('fs');
-const { fileURLToPath } = require('url');
-
+const { checkTargetUrl, isPrivateHost } = require('../security');
 const LIMITS = {
   maxFiles: 50, // внешних css+js файлов
   maxFileBytes: 2 * 1024 * 1024, // 2 МБ на файл
@@ -22,19 +24,41 @@ function byteLength(s) {
   return Buffer.byteLength(s, 'utf8');
 }
 
-/** Скачать один внешний ресурс. Возвращает { content } | { error } | { skipped, reason }. */
-async function download(context, resourceUrl) {
-  if (resourceUrl.startsWith('file://')) {
-    try {
-      const p = fileURLToPath(resourceUrl);
-      const st = fs.statSync(p);
-      if (st.size > LIMITS.maxFileBytes) {
-        return { skipped: true, reason: 'file-too-big', size: st.size };
-      }
-      return { content: fs.readFileSync(p, 'utf8') };
-    } catch (err) {
-      return { error: String(err.message || err) };
-    }
+/**
+ * Скачать один внешний ресурс. Возвращает { content } | { error } | { skipped, reason }.
+ * `baseOrigin` — origin анализируемой страницы; ссылки с него считаются своими.
+ * `pageIsLocal` — сама страница на приватном адресе (анализ локальной сборки).
+ */
+async function download(context, resourceUrl, baseOrigin, pageIsLocal) {
+  // Локальные файлы не читаем никогда: ссылки приходят из HTML страницы,
+  // и "дружественная" страница так вытаскивает произвольные файлы с диска.
+  if (resourceUrl.startsWith('file:')) {
+    return { skipped: true, reason: 'file-scheme-blocked' };
+  }
+
+  // 1. Схема — только http(s)
+  const verdict = checkTargetUrl(resourceUrl);
+  if (!verdict.ok) {
+    return { skipped: true, reason: `blocked:${verdict.reason}` };
+  }
+
+  // 2. Тот же origin, что и страница. Этого достаточно, чтобы страница не
+  //    уводила сервер на произвольные адреса (в т.ч. в приватные сети).
+  let origin = null;
+  try {
+    origin = new URL(resourceUrl).origin;
+  } catch {
+    return { error: 'bad resource url' };
+  }
+  if (baseOrigin && origin !== baseOrigin) {
+    return { skipped: true, reason: 'cross-origin-blocked' };
+  }
+
+  // 3. Если origin страницы неизвестен, всё равно не даём уйти в приватные
+  //    адреса и metadata. Для локальной страницы её собственный origin
+  //    разрешён по определению (это анализ локальной сборки, шаг 1 в security.js).
+  if (!baseOrigin && !pageIsLocal && isPrivateHost(new URL(resourceUrl).hostname)) {
+    return { skipped: true, reason: 'blocked:private' };
   }
 
   try {
@@ -71,6 +95,18 @@ async function fetchSources(url, opts = {}) {
 
     const finalUrl = page.url();
     const html = await page.content();
+    let baseOrigin = null;
+    let pageHost = null;
+    try {
+      const parsed = new URL(finalUrl);
+      baseOrigin = parsed.origin;
+      pageHost = parsed.hostname;
+    } catch {
+      baseOrigin = null;
+    }
+    // Страница на приватном адресе (localhost/staging) — её собственные
+    // ресурсы с того же адреса разрешены
+    const pageIsLocal = pageHost ? isPrivateHost(pageHost) : true;
     const found = await page.evaluate(() => {
       const cssLinks = [...document.querySelectorAll('link[rel~="stylesheet"]')].map((e) => e.href).filter(Boolean);
       const jsScripts = [...document.querySelectorAll('script[src]')].map((e) => e.src).filter(Boolean);
@@ -107,7 +143,7 @@ async function fetchSources(url, opts = {}) {
         continue;
       }
 
-      const res = await download(context, item.url);
+      const res = await download(context, item.url, baseOrigin, pageIsLocal);
       if (res.skipped) {
         truncated.push({ url: item.url, reason: res.reason, size: res.size ?? null });
         continue;
