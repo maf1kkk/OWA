@@ -28,7 +28,8 @@ function createMaintenance(db, opts = {}) {
     `DELETE FROM code_sessions WHERE status NOT IN ('in_progress') AND updated_at < ?`
   );
   const clearSourcesGz = db.prepare(
-    `UPDATE code_sessions SET sources_gz = NULL WHERE sources_gz IS NOT NULL AND status = 'done'`
+    `UPDATE code_sessions SET sources_gz = NULL
+      WHERE sources_gz IS NOT NULL AND status <> 'in_progress'`
   );
   const aiCacheOld = db.prepare(`DELETE FROM ai_responses WHERE created_at < ?`);
 

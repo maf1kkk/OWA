@@ -2,17 +2,38 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
-## [Unreleased]
+## [1.2.0] — 2026-10-15
+
+Безопасность, авторизация и ретеншн — выпуск для публичного использования.
 
 ### Added
-- `src/browser.js` — единый запуск браузера: сначала Chromium из кэша Playwright, при его отсутствии — системный Chrome, затем Edge (тот же движок). Канал задаётся `OWA_BROWSER_CHANNEL=chrome|msedge`; при полном отсутствии браузера — понятная ошибка с командами, а не стектрейс Playwright.
-- `OWA_BROWSER_CHANNEL` в `.env.example` (CLI и MCP-сервер грузят `.env` через `src/browser.js`, реальный env приоритетнее).
-- `opencode.json` в корне — MCP-серверы для разработки: `context7` (актуальные доки библиотек), `playwright` и `chrome-devtools` (браузер для проверки веб-интерфейса), `memory`, `sequential-thinking`, `owa` (собственный MCP-сервер проекта).
+- `web/auth.js` + `web/middleware/auth.js` — авторизация: **Basic Auth** (`AUTH_LOGIN` + `AUTH_PASSWORD_HASH`, bcrypt) и **Bearer** (`API_BEARER_TOKEN`, сравнение через `crypto.timingSafeEqual`). При включённом Bearer он применяется к `/api/*`, остальное уходит на Basic. `WWW-Authenticate` в 401. `/health`, `/api/health`, `/favicon.ico` открыты всегда.
+- `web/server.js`: отказ запуска с `HOST=0.0.0.0` без пароля; корректное завершение по `SIGINT`/`SIGTERM` с `closeDb()`; обработка `uncaughtException`/`unhandledRejection`.
+- `src/security.js` — защита от SSRF и утечки локальных файлов, два независимых уровня: целевой URL (http/https, приватные адреса разрешены как штатный локальный сценарий) и URL ресурсов со страницы (http/https, только тот же origin, `file://` запрещён всегда). Распознаются обфусцированные IP: `http://2130706433/`, `http://0x7f000001/`, восьмеричные. `OWA_DENY_PRIVATE_TARGETS=1` — жёсткий режим для публичного деплоя.
+- `src/db/maintenance.js` — обслуживание БД: ретеншн (`OWA_RETENTION_DAYS`, по умолчанию 30 дней) для `analyses`/`ai_responses`/завершённых сессий, очистка `sources_gz` у завершённых сессий, `wal_checkpoint(TRUNCATE)`; по расписанию из `web/server.js` (`OWA_MAINTENANCE_EVERY_MS`).
+- Security-заголовки: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`.
+- Лимиты и защита API: `429 TOO_MANY_REQUESTS` при `OWA_MAX_CONCURRENT` (по умолч. 2) параллельных анализах, `413 PAYLOAD_TOO_LARGE`, `.max(20)`/`.max(200)` на селекторы, `headed` через API только с `OWA_ALLOW_HEADED=1`.
+- Тесты: `test/security.test.js` (8) — валидация URL, обфускация, двух уровневые правила; `test/engine.test.js` (6) — полный цикл анализа на локальном http-сервере, стабильность схемы, поведение при обрыве связи; `test/maintenance.test.js` (5) — ретеншн, `sources_gz`, WAL. Итого **103 теста** (было 76).
+- Отдельные тесты авторизации в `test/web.test.js` (8): Basic/Bearer, 401 с `WWW-Authenticate`, битый хэш не пускает и не роняет сервер, `/health` открыт всегда.
 
 ### Fixed
-- OWA падал с `Executable doesn't exist ... ms-playwright` на машинах без кэша Playwright (нет доступа к CDN) — теперь используется системный Chromium-браузер.
-- `scripts/check-env.js` больше не считает это фатальной проблемой, если найден системный Chrome/Edge: сообщает `[!]` и подсказку, код выхода `0`.
-- Документация подключения MCP (`mcp/server.js`, `README.md`) обновлена с устаревшего формата opencode v1 (`mcp.owa`) на v2 (`mcp.servers.owa`).
+- **Авторизация, задокументированная в README/`.env.example`, отсутствовала в коде** — все роуты были открытыми, `bcrypt` не использовался. Теперь работает; без пароля сервер вообще не слушает наружу.
+- **SSRF и чтение произвольных локальных файлов через пользовательский `url`** — страница могла заставить сервер прочитать `file:///...` с диска (и отправить содержимое в LLM) либо сходить на внутренний адрес вроде `169.254.169.254`.
+- Утечка процессов Chromium: `analyze()` не закрывал браузер при таймауте навигации или ошибке на странице — теперь `try/finally` для контекста и браузера.
+- Мутация общей константы `DEFAULT_WIDGET_SELECTORS` между вызовами — массив рос на каждой итерации; теперь копия.
+- Внутренние сообщения об ошибках Playwright уходили в ответ клиента — теперь наружу нейтральное сообщение, детали только в лог.
+- `waitMs`/`timeoutMs` из MCP не ограничивались: агент мог передать `1e12` и повесить сервер; добавлен кламп и таймаут вызова `OWA_MCP_TOOL_TIMEOUT_MS` (по умолч. 5 минут).
+- Неограниченный рост БД: `code_sessions.sources_gz` (gzip до 15 МБ) оставался после завершения сессии, WAL не чекпоинтился при остановке.
+- `code_sessions` со статусом `error` не очищали `sources_gz` — только `done`.
+- `src/engine.js`: число ожидания после load клампится (`clampWait`, 0…60000), защита от `NaN`/отрицательных.
+- `mcp/server.js`: версия сервера берётся из `package.json` вместо захардкоденной `1.0.0`.
+- `decodeIPv4` в валидаторе URL: десятичная запись `2130706433` (127.0.0.1) не распознавалась и проходила как публичный адрес.
+
+### Changed
+- `pino` убран из зависимостей (не использовался). `bcrypt` остаётся — теперь применяется в `web/auth.js`.
+- `bin/owa.js`: `--wait 0` корректно означает 0, а не «по умолчанию» (`??` вместо `||`).
+- `mcp/server.js`: `analyze_url` принимает `timeoutMs`; селекторы ограничены 20.
+- README: раздел «Безопасность» (авторизация, SSRF), таблица переменных, `.env.example` с описанием всех режимов.
 
 ## [1.1.0] — 2026-10-10
 
