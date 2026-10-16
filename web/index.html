@@ -212,6 +212,17 @@
   }
   footer a { color: var(--muted); }
   footer a:hover { color: var(--accent); }
+
+  @media print {
+    body { background: #fff !important; color: #000 !important; }
+    header, footer, form.panel, .spinner, .error, .actions, .toolbar, button { display: none !important; }
+    .card { border: none; background: #fff !important; box-shadow: none !important; }
+    table { border: 1px solid #000; }
+    th, td { border: 1px solid #000; padding: 4px 8px; }
+    .v { border: none !important; padding: 0 !important; }
+    section { display: block !important; }
+    .canvas-wrap { display: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -271,6 +282,17 @@
       <tbody></tbody>
     </table>
     <div id="historyCharts" style="margin-top:26px"></div>
+
+    <div id="historyDiffBlock" style="margin-top:26px; display:none">
+      <div class="toolbar">
+        <label style="font-family:var(--mono);font-size:12px;color:var(--muted)">Запуск 1:</label>
+        <select id="diffId1"></select>
+        <label style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:12px">Запуск 2:</label>
+        <select id="diffId2"></select>
+        <button class="ghost" id="btnDiff">Сравнить запуски</button>
+      </div>
+      <div id="diffResult"></div>
+    </div>
   </section>
 </main>
 
@@ -365,6 +387,7 @@ function render(url, d) {
     <button class="ghost" id="btnJson">Показать JSON (для ИИ)</button>
     <button class="ghost" id="btnCopy">Скопировать компактный JSON</button>
     <button class="ghost" id="btnDownload">Скачать отчёт .json</button>
+    <button class="ghost" id="btnPrint">PDF (печать)</button>
   </div>
 
   <div class="card">
@@ -484,6 +507,7 @@ function render(url, d) {
     a.click();
     URL.revokeObjectURL(a.href);
   });
+  $('btnPrint').addEventListener('click', () => window.print());
 }
 
 /* ---------- История ---------- */
@@ -559,6 +583,47 @@ async function loadHistory() {
         showSection('section-history');
         drawCharts(btn.dataset.url);
       });
+    });
+
+    const diff1 = $('diffId1');
+    const diff2 = $('diffId2');
+    diff1.innerHTML = '';
+    diff2.innerHTML = '';
+    for (const it of items) {
+      const label = `#${it.id} · ${esc(it.url)} · ${new Date(it.createdAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+      const o1 = document.createElement('option');
+      o1.value = it.id;
+      o1.textContent = label;
+      diff1.appendChild(o1);
+      const o2 = document.createElement('option');
+      o2.value = it.id;
+      o2.textContent = label;
+      diff2.appendChild(o2);
+    }
+    if (items.length >= 2) {
+      diff1.value = items[0].id;
+      diff2.value = items[1].id;
+      $('historyDiffBlock').style.display = 'block';
+    } else {
+      $('historyDiffBlock').style.display = 'none';
+    }
+
+    $('btnDiff').addEventListener('click', async () => {
+      const id1 = diff1.value;
+      const id2 = diff2.value;
+      if (!id1 || !id2 || id1 === id2) {
+        $('diffResult').innerHTML = '<div class="error on">Выберите два разных запуска</div>';
+        return;
+      }
+      try {
+        const res = await fetch(`/api/history/diff?id1=${id1}&id2=${id2}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'ошибка сравнения');
+        $('diffResult').innerHTML = renderDiff(data.a, data.b, data.diff);
+        $('historyDiffBlock').style.display = 'block';
+      } catch (err) {
+        $('diffResult').innerHTML = `<div class="error on">Ошибка сравнения: ${esc(err.message)}</div>`;
+      }
     });
   } catch (err) {
     $('historyTable').querySelector('tbody').innerHTML = `<tr><td colspan="6" style="color:var(--red)">Ошибка загрузки истории: ${esc(err.message)}</td></tr>`;
@@ -678,6 +743,54 @@ $('btnHistoryGraphs').addEventListener('click', (e) => {
   showSection('section-history');
   drawCharts(null);
 });
+
+function renderDiff(a, b, diff) {
+  const scoreDelta = (b.summary && typeof b.summary.score === 'number' ? b.summary.score : 0)
+    - (a.summary && typeof a.summary.score === 'number' ? a.summary.score : 0);
+  const rows = [{
+    metric: 'Оценка',
+    baseline: a.summary && typeof a.summary.score === 'number' ? a.summary.score : '—',
+    current: b.summary && typeof b.summary.score === 'number' ? b.summary.score : '—',
+    delta: scoreDelta,
+    pct: null,
+    regression: scoreDelta < 0,
+    status: scoreDelta < 0 ? 'regression' : scoreDelta > 0 ? 'improved' : 'same',
+  }];
+  for (const row of diff.rows) {
+    if (row.status === 'no-data') continue;
+    rows.push({
+      metric: row.metric,
+      baseline: row.baseline ?? '—',
+      current: row.current ?? '—',
+      delta: row.delta,
+      pct: row.pct,
+      regression: row.regression,
+      status: row.status,
+    });
+  }
+  const t = rows.map((r) => {
+    const sign = r.delta !== null && r.delta > 0 ? '+' : '';
+    const deltaText = r.delta === null ? '—' : `${sign}${r.delta}${r.metric === 'CLS' ? '' : ' мс'}`;
+    const pctText = r.pct === null ? '' : ` (${r.delta >= 0 ? '+' : ''}${r.pct}%)`;
+    const cls = r.regression ? 'bad' : r.status === 'improved' ? 'good' : 'muted';
+    const statusText = r.regression ? 'регрессия' : r.status === 'improved' ? 'лучше' : 'без изменений';
+    return `<tr>
+      <td>${esc(r.metric)}</td>
+      <td class="num">${r.baseline}</td>
+      <td class="num">${r.current}</td>
+      <td class="num ${cls}">${deltaText}${pctText}</td>
+      <td>${statusText}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="card">
+    <h2>Сравнение запусков</h2>
+    <div class="url-line">${esc(a.url)} · #${a.id} (${new Date(a.createdAt).toLocaleString('ru-RU')}) vs #${b.id} (${new Date(b.createdAt).toLocaleString('ru-RU')})</div>
+    <table>
+      <tr><th>Метрика</th><th style="text-align:right">Запуск 1</th><th style="text-align:right">Запуск 2</th><th style="text-align:right">Изменение</th><th>Статус</th></tr>
+      ${rows.length ? t : '<tr><td colspan="5" style="color:var(--muted)">Нет общих метрик для сравнения</td></tr>'}
+    </table>
+  </div>`;
+}
 </script>
 </body>
 </html>

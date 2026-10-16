@@ -1,0 +1,86 @@
+name: scheduled analysis
+
+on:
+  schedule:
+    # Каждый день в 06:00 UTC.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      # История анализа хранится в SQLite — переносим базу между прогонами через артефакт,
+      # иначе сравнение с предыдущим запуском не имеет смысла.
+      - name: Скачать базу анализов из прошлого прогона
+        uses: actions/download-artifact@v4
+        with:
+          name: owa-db
+          path: .
+        continue-on-error: true
+
+      - id: analyze
+        name: Запланированный анализ списка сайтов
+        env:
+          OWA_SCHEDULE_URLS: ${{ secrets.OWA_SCHEDULE_URLS }}
+          OWA_SCHEDULE_SELECTORS: ${{ secrets.OWA_SCHEDULE_SELECTORS }}
+          OWA_SCHEDULE_WAIT_MS: '5000'
+          OWA_SCHEDULE_TIMEOUT_MS: '60000'
+          OWA_SCHEDULE_THRESHOLD_PCT: '5'
+          DB_PATH: data/owa.db
+        run: |
+          set +e
+          node scripts/scheduled.js | tee /tmp/schedule-result.json
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Создать Issue при регрессии
+        if: steps.analyze.outputs.exit_code == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const r = JSON.parse(fs.readFileSync("/tmp/schedule-result.json", "utf8"));
+            let md = "# OWA: регрессии производительности\n\n";
+            let any = false;
+            for (const [url, e] of Object.entries(r)) {
+              if (!e.regressions || !e.regressions.length) continue;
+              any = true;
+              md += `## ${url}\nСкор: ${e.score}, статус: ${e.status}\n`;
+              if (e.error) md += `\nОшибка: ${e.error}\n`;
+              md += "\n";
+              for (const reg of e.regressions) {
+                md += `- **${reg.metric}**: ${reg.baseline ?? "—"} → ${reg.current ?? "—"} (`;
+                md += `${reg.delta > 0 ? "+" : ""}${reg.delta ?? 0} мс, ${reg.pct ?? 0}%)\n`;
+              }
+              md += "\n";
+            }
+            if (!any) md = "Регрессий не обнаружено.\n";
+            fs.writeFileSync("/tmp/regression-body.md", md);
+          '
+          gh issue create \
+            --title "OWA: регрессии производительности $(date +%F)" \
+            --body "$(cat /tmp/regression-body.md)" \
+            --label "performance,regression" \
+            || true
+
+      - name: Сохранить базу анализов в артефакт
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owa-db
+          path: data/owa.db
+          overwrite: true
+          retention-days: 30

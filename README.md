@@ -278,6 +278,8 @@ src/collectors/
 | `POST` | `/api/code-analysis` | Статический анализ кода с продолжением: `{ url }` → первая сессия, `{ sessionId, explain? }` → следующий батч, см. раздел «Статический анализ кода» |
 | `POST` | `/api/ai/explain` | AI-объяснения находок: `{ analysisId, force? }` → `{ ok, findings, explained, cached }`, см. раздел «AI-объяснения» |
 | `GET` | `/api/history?limit&offset&url` | Список анализов: `{ ok, items, total }` |
+| `GET` | `/api/history/metrics?limit&url` | Метрики во времени для графиков: `{ ok, series }` |
+| `GET` | `/api/history/diff?id1&id2[&threshold]` | Сравнение двух запусков: метрики, вердикты, регрессии |
 | `GET` | `/api/history/:id` | Детали анализа (+ `codeFindings`) |
 | `DELETE` | `/api/history/:id` | Удалить запись (каскадно) |
 | `DELETE` | `/api/history` | Очистить историю целиком |

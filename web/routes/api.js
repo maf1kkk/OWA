@@ -5,6 +5,8 @@
  *   GET    /api/health         { ok, tool }            — существующий контракт UI
  *   POST   /api/analyze        синхронный анализ (+сохранение в историю)
  *   GET    /api/history        список анализов
+ *   GET    /api/history/metrics  метрики во времени для графиков
+ *   GET    /api/history/diff     сравнение двух анализов
  *   GET    /api/history/:id    детали анализа
  *   DELETE /api/history/:id    удалить (каскадно)
  *   DELETE /api/history        очистить историю целиком
@@ -15,6 +17,7 @@ const express = require('express');
 const { z } = require('zod');
 const { analyze } = require('../../src/engine');
 const { buildCompact } = require('../../src/interpret');
+const { diffWithBaseline } = require('../../src/diff');
 const { checkTargetUrl } = require('../../src/security');
 const {
   HttpError,
@@ -176,6 +179,33 @@ function createApiRouter({ repos }) {
     res.json({ ok: true, url: url ?? null, series });
   });
 
+  const diffQuerySchema = z.object({
+    id1: z.coerce.number().int().positive(),
+    id2: z.coerce.number().int().positive(),
+    threshold: z.coerce.number().int().min(1).max(100).optional(),
+  });
+
+  // Сравнение двух запусков бок о бок: метрики + вердикты + регрессии.
+  router.get('/api/history/diff', validateQuery(diffQuerySchema), (req, res) => {
+    const { id1, id2, threshold = 5 } = req.valid;
+    const a = repos.analyses.get(id1);
+    const b = repos.analyses.get(id2);
+    if (!a || !b) {
+      throw new HttpError(404, 'NOT_FOUND', 'Один из анализов не найден');
+    }
+    const diff = diffWithBaseline(
+      { metrics: a.metrics },
+      { metrics: b.metrics },
+      threshold
+    );
+    res.json({
+      ok: true,
+      a: { id: a.id, url: a.url, createdAt: a.createdAt, summary: a.summary, metrics: a.metrics },
+      b: { id: b.id, url: b.url, createdAt: b.createdAt, summary: b.summary, metrics: b.metrics },
+      diff,
+    });
+  });
+
   router.get('/api/history/:id', validateParams(idParamSchema), (req, res) => {
     const analysis = repos.analyses.get(req.valid.id);
     if (!analysis) {
@@ -195,13 +225,6 @@ function createApiRouter({ repos }) {
 
   router.delete('/api/history', (_req, res) => {
     res.json({ ok: true, deleted: repos.analyses.clear() });
-  });
-
-  // ----------------------------------------------------------- метрики во времени (графики)
-  router.get('/api/history/metrics', validateQuery(historyMetricsSchema), async (req, res) => {
-    const { limit = 30, url } = req.valid;
-    const series = repos.analyses.metricsSeries({ url: url ?? null, limit });
-    res.json({ ok: true, url: url ?? null, series });
   });
 
   return router;
