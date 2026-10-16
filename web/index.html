@@ -52,8 +52,16 @@
     background: var(--green); margin-right: 5px; vertical-align: middle;
   }
   header .status.err .dot { background: var(--red); }
+  header nav a {
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    text-decoration: none; margin-left: 16px;
+  }
+  header nav a.active { color: var(--accent); }
+  header nav a:hover { color: var(--accent); }
 
   main { max-width: 900px; margin: 0 auto; padding: 24px 20px 60px; }
+  section { display: none; }
+  section.active { display: block; }
 
   form.panel {
     background: var(--panel);
@@ -168,6 +176,7 @@
   .v.info { color: var(--muted); border: 1px solid var(--border); }
   .rec { color: var(--muted); font-size: 12px; display: block; margin-top: 2px; max-width: 520px; }
   td.sel { font-family: var(--mono); font-size: 12px; }
+  td.act { white-space: nowrap; }
 
   .actions { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   button.ghost {
@@ -185,6 +194,17 @@
     overflow: auto; max-height: 480px;
     white-space: pre; color: #a5d6ff;
   }
+
+  /* История и графики */
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  select { background: var(--bg-inset); border: 1px solid var(--border); border-radius: 6px; color: var(--fg); padding: 6px 10px; font-family: var(--mono); font-size: 12px; }
+  .empty { color: var(--muted); font-family: var(--mono); padding: 24px 0; text-align: center; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .chart-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .chart-card h3 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 12px; }
+  .canvas-wrap { position: relative; height: 250px; }
+  .chart-nodata { color: var(--muted); font-family: var(--mono); font-size: 12px; padding: 40px 0; text-align: center; }
+
   footer {
     text-align: center; color: var(--muted); font-size: 11px;
     padding: 20px; border-top: 1px solid var(--border);
@@ -199,42 +219,82 @@
   <span class="logo">O</span>
   <h1>OWA</h1>
   <span class="badge">One-Click Web Analyzer</span>
+  <nav>
+    <a href="#" id="navAnalyze" class="active">Анализ</a>
+    <a href="#" id="navHistory">История</a>
+  </nav>
   <span class="status" id="health"><span class="dot"></span>ready</span>
 </header>
 
 <main>
-  <form class="panel" id="form">
-    <div class="row url">
-      <input type="url" id="url" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
-      <button class="primary" id="btn" type="submit">Анализировать</button>
-    </div>
-    <details class="options">
-      <summary>Дополнительные параметры</summary>
-      <div class="grid">
-        <label>Селекторы виджетов (через запятую)
-          <input type="text" id="selectors" placeholder="#match-widget, .chat">
-        </label>
-        <label>Ожидание после load, мс
-          <input type="number" id="wait" value="5000" min="0" max="60000" step="500">
-        </label>
-        <label>Таймаут навигации, мс
-          <input type="number" id="timeout" value="60000" min="5000" max="120000" step="1000">
-        </label>
-        <label class="check"><input type="checkbox" id="consoleLogs"> Перехватывать console-логи страницы</label>
+  <section id="section-analyze" class="active">
+    <form class="panel" id="form">
+      <div class="row url">
+        <input type="url" id="url" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
+        <button class="primary" id="btn" type="submit">Анализировать</button>
       </div>
-    </details>
-  </form>
+      <details class="options">
+        <summary>Дополнительные параметры</summary>
+        <div class="grid">
+          <label>Селекторы виджетов (через запятую)
+            <input type="text" id="selectors" placeholder="#match-widget, .chat">
+          </label>
+          <label>Ожидание после load, мс
+            <input type="number" id="wait" value="5000" min="0" max="60000" step="500">
+          </label>
+          <label>Таймаут навигации, мс
+            <input type="number" id="timeout" value="60000" min="5000" max="120000" step="1000">
+          </label>
+          <label class="check"><input type="checkbox" id="consoleLogs"> Перехватывать console-логи страницы</label>
+        </div>
+      </details>
+    </form>
 
-  <div class="spinner" id="spinner"><span class="ring"></span><span id="spinnerText">Открываю страницу в headless Chromium…</span></div>
-  <div class="error" id="error"></div>
-  <div id="result"></div>
+    <div class="spinner" id="spinner"><span class="ring"></span><span id="spinnerText">Открываю страницу в headless Chromium…</span></div>
+    <div class="error" id="error"></div>
+    <div id="result"></div>
+  </section>
+
+  <section id="section-history">
+    <div class="toolbar">
+      <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">URL:</span>
+      <select id="histUrl"><option value="">все сайты</option></select>
+      <button class="ghost" id="btnRefreshHistory">Обновить</button>
+      <a class="ghost" id="btnHistoryGraphs" style="margin-left:auto">Графики по метрикам →</a>
+    </div>
+
+    <div id="historyEmpty" class="empty">Анализа ещё нет. Запустите анализ любого сайта выше.</div>
+    <table id="historyTable">
+      <thead>
+        <tr><th>Дата</th><th>URL</th><th style="text-align:right">Скор</th><th>Статус</th><th style="text-align:right">Длительность</th><th style="width:180px">Действия</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div id="historyCharts" style="margin-top:26px"></div>
+  </section>
 </main>
 
 <footer>OWA · локальный анализ через Playwright Chromium · <a href="/api/health">/api/health</a> · POST /api/analyze — JSON для ИИ-агентов</footer>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function showSection(id) {
+  document.querySelectorAll('section').forEach((s) => s.classList.remove('active'));
+  document.querySelectorAll('header nav a').forEach((a) => a.classList.remove('active'));
+  $(id).classList.add('active');
+  $(id === 'section-analyze' ? 'navAnalyze' : 'navHistory').classList.add('active');
+}
+
+document.querySelectorAll('header nav a').forEach((a) => {
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    showSection(a.getAttribute('href').replace('#', ''));
+    if (a.id === 'navHistory') loadHistory();
+  });
+});
 
 fetch('/api/health').then(r => r.json()).then(d => {
   if (!d.ok) throw 0;
@@ -329,7 +389,6 @@ function render(url, d) {
   }
   html += `</table></div>`;
 
-  // Фазы навигации
   if (m.navigation) {
     const n = m.navigation;
     html += `<div class="card"><h2>Фазы навигации</h2><table>
@@ -343,7 +402,6 @@ function render(url, d) {
     </table></div>`;
   }
 
-  // Виджеты
   html += `<div class="card"><h2>Виджеты (время появления)</h2><table>
     <tr><th>Селектор</th><th style="text-align:right">Время</th></tr>`;
   for (const [sel, t] of Object.entries(m.customWidgets.results)) {
@@ -352,7 +410,6 @@ function render(url, d) {
   }
   html += `</table></div>`;
 
-  // Ресурсы
   html += `<div class="card"><h2>Ресурсы (${m.resources.count} шт)</h2><table>
     <tr><th>Тип</th><th style="text-align:right">Кол-во</th><th style="text-align:right">Объём</th><th style="text-align:right">Сред. время</th></tr>`;
   const kbFmt = (b) => b >= 1048576 ? (b/1048576).toFixed(2) + ' МБ' : b >= 1024 ? (b/1024).toFixed(1) + ' КБ' : b + ' Б';
@@ -361,7 +418,6 @@ function render(url, d) {
   }
   html += `</table></div>`;
 
-  // Long tasks
   html += `<div class="card"><h2>Long Tasks</h2><table>
     <tr><td>Долгих задач (&gt;50 мс)</td><td class="num">${m.longTasks.count}</td></tr>
     <tr><td>Макс. длительность</td><td class="num">${m.longTasks.maxDuration} мс</td></tr>
@@ -404,6 +460,199 @@ function render(url, d) {
     URL.revokeObjectURL(a.href);
   });
 }
+
+/* ---------- История ---------- */
+let charts = {};
+
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/history');
+    const data = await res.json();
+    const tbody = $('historyTable').querySelector('tbody');
+    const empty = $('historyEmpty');
+    const urlSel = $('histUrl');
+    const selVal = urlSel.value;
+    urlSel.innerHTML = '<option value="">все сайты</option>';
+
+    const urls = [...new Set(data.items.map((it) => it.url))].sort();
+    for (const u of urls) {
+      const o = document.createElement('option');
+      o.value = u; o.textContent = u;
+      urlSel.appendChild(o);
+    }
+    if (selVal) urlSel.value = selVal;
+
+    tbody.innerHTML = '';
+    const items = selVal ? data.items.filter((it) => it.url === selVal) : data.items;
+    if (items.length === 0) {
+      empty.textContent = 'Записей для этого URL не найдено.';
+      empty.style.display = 'block';
+      $('historyTable').style.display = 'none';
+      $('historyCharts').innerHTML = '';
+      return;
+    }
+    empty.style.display = 'none';
+    $('historyTable').style.display = 'table';
+
+    for (const it of items) {
+      const summary = it.summary || {};
+      const status = summary.status || it.status;
+      const vc = status === 'good' ? 'good' : status === 'warn' ? 'warn' : 'bad';
+      const when = new Date(it.createdAt).toLocaleString('ru-RU', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      tbody.innerHTML += `
+        <tr>
+          <td class="num" style="font-family:var(--mono)">${when}</td>
+          <td class="sel" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.url)}</td>
+          <td class="num"><span class="score ${vc}">${summary.score ?? '—'}</span></td>
+          <td>${verdictBadge(status)}</td>
+          <td class="num">${it.durationMs !== null ? it.durationMs + ' мс' : '—'}</td>
+          <td class="act">
+            <button class="ghost" data-act="report" data-id="${it.id}">Отчёт</button>
+            <button class="ghost" data-act="graph" data-url="${esc(it.url)}">Графики</button>
+          </td>
+        </tr>`;
+    }
+
+    tbody.querySelectorAll('[data-act="report"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        showSection('section-analyze');
+        const res = await fetch(`/api/history/${id}`);
+        const data = await res.json();
+        const a = data.analysis;
+        render(a.url, {
+          url: a.url,
+          meta: { url: a.url, analyzedAt: new Date(a.createdAt).toISOString() },
+          metrics: a.metrics || {},
+          interpretation: { summary: a.summary || { score: 0, status: 'good', headline: '—' }, findings: a.findings || [] },
+        });
+      });
+    });
+    tbody.querySelectorAll('[data-act="graph"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        urlSel.value = btn.dataset.url;
+        showSection('section-history');
+        drawCharts(btn.dataset.url);
+      });
+    });
+  } catch (err) {
+    $('historyTable').querySelector('tbody').innerHTML = `<tr><td colspan="6" style="color:var(--red)">Ошибка загрузки истории: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+$('btnRefreshHistory').addEventListener('click', loadHistory);
+$('histUrl').addEventListener('change', () => {
+  loadHistory();
+  drawCharts($('histUrl').value || null);
+});
+
+/* ---------- Графики ---------- */
+const palette = {
+  score: getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#6cb6ff',
+  lcp: '#f85149',
+  fcp: '#d29922',
+  ttfb: '#8b949e',
+  cls: '#3fb950',
+  tbt: '#a371f7',
+  resources: '#238636',
+};
+
+function canvasColor(key) { return palette[key]; }
+
+async function drawCharts(url) {
+  if (typeof Chart === 'undefined') {
+    $('historyCharts').innerHTML = '<div class="chart-nodata">Библиотека графиков не загружена</div>';
+    return;
+  }
+  Object.values(charts).forEach((c) => c.destroy());
+  charts = {};
+
+  const qs = new URLSearchParams();
+  if (url) qs.set('url', url);
+  qs.set('limit', '30');
+  const res = await fetch(`/api/history/metrics?${qs}`);
+  const data = await res.json();
+  const series = data.series || [];
+
+  const title = url ? `за последние ${series.length} анализов — ${esc(url)}` : `за последние ${series.length} анализов — все сайты`;
+  $('historyCharts').innerHTML = `
+    <h3 style="font-family:var(--mono);font-size:13px;color:var(--muted);margin-bottom:10px">Метрики во времени — ${title}</h3>
+    <div class="charts">
+      <div class="chart-card"><h3>Оценка (0–100)</h3><div class="canvas-wrap"><canvas id="chScore"></canvas></div></div>
+      <div class="chart-card"><h3>Скорость: LCP / FCP / TTFB (мс)</h3><div class="canvas-wrap"><canvas id="chSpeed"></canvas></div></div>
+      <div class="chart-card"><h3>CLS</h3><div class="canvas-wrap"><canvas id="chCls"></canvas></div></div>
+      <div class="chart-card"><h3>TBT (мс)</h3><div class="canvas-wrap"><canvas id="chTbt"></canvas></div></div>
+      <div class="chart-card"><h3>Ресурсы (шт)</h3><div class="canvas-wrap"><canvas id="chResources"></canvas></div></div>
+      <div class="chart-card"><h3>Long Tasks (шт)</h3><div class="canvas-wrap"><canvas id="chLongtasks"></canvas></div></div>
+    </div>`;
+
+  const labels = series.map((s) => new Date(s.createdAt));
+  const get = (key) => series.map((s) => s[key]);
+
+  function lineChart(id, datasets, options = {}) {
+    const ctx = $(id).getContext('2d');
+    charts[id] = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'top', labels: { color: varFg, font: { family: 'var(--mono)', size: 11 } } }, title: { display: false } },
+        scales: {
+          x: { type: 'time', time: { unit: 'hour', tooltipFormat: 'dd.MM HH:mm' }, ticks: { color: varMuted, font: { family: 'var(--mono)', size: 10 } } },
+          y: { beginAtZero: true, ticks: { color: varMuted, font: { family: 'var(--mono)', size: 10 } }, grid: { color: varBorder } },
+        },
+        ...options,
+      },
+    });
+  }
+
+  const varFg = getComputedStyle(document.documentElement).getPropertyValue('--fg') || '#e6edf3';
+  const varMuted = getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#8b949e';
+  const varBorder = getComputedStyle(document.documentElement).getPropertyValue('--border') || '#30363d';
+
+  const hasData = series.some((s) => Object.values(s).some((v) => v !== null && v !== undefined));
+
+  if (!hasData) {
+    Array.from(document.querySelectorAll('.canvas-wrap')).forEach((wrap) => {
+      wrap.innerHTML = '<div class="chart-nodata">Недостаточно данных для графика</div>';
+    });
+    return;
+  }
+
+  lineChart('chScore', [{
+    label: 'Оценка', data: get('score'), borderColor: palette.score, backgroundColor: palette.score + '1a',
+    fill: true, tension: 0.3, pointRadius: 3,
+  }]);
+
+  lineChart('chSpeed', [
+    { label: 'LCP', data: get('lcpMs'), borderColor: palette.lcp, backgroundColor: palette.lcp + '1a', fill: false, tension: 0.3, pointRadius: 3 },
+    { label: 'FCP', data: get('fcpMs'), borderColor: palette.fcp, backgroundColor: palette.fcp + '1a', fill: false, tension: 0.3, pointRadius: 3 },
+    { label: 'TTFB', data: get('ttfbMs'), borderColor: palette.ttfb, backgroundColor: palette.ttfb + '1a', fill: false, tension: 0.3, pointRadius: 3 },
+  ]);
+
+  lineChart('chCls', [{
+    label: 'CLS', data: get('cls'), borderColor: palette.cls, backgroundColor: palette.cls + '1a', fill: true, tension: 0.3, pointRadius: 3,
+  }]);
+
+  lineChart('chTbt', [{
+    label: 'TBT', data: get('tbtMs'), borderColor: palette.tbt, backgroundColor: palette.tbt + '1a', fill: false, tension: 0.3, pointRadius: 3,
+  }]);
+
+  lineChart('chResources', [{
+    label: 'Ресурсы', data: get('resources'), borderColor: palette.resources, backgroundColor: palette.resources + '1a', fill: false, tension: 0.3, pointRadius: 3,
+  }]);
+
+  lineChart('chLongtasks', [{
+    label: 'Long Tasks', data: get('longTasks'), borderColor: palette.red, backgroundColor: palette.red + '1a', fill: false, tension: 0.3, pointRadius: 3,
+  }]);
+}
+
+$('btnHistoryGraphs').addEventListener('click', (e) => {
+  e.preventDefault();
+  showSection('section-history');
+  drawCharts(null);
+});
 </script>
 </body>
 </html>

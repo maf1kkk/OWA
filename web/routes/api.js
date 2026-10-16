@@ -44,8 +44,13 @@ const analyzeSchema = z.object({
 
 const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
-  url: z.string().min(1).optional(),
+  offset: z.coerce.number().int().min(0).max(10000).optional(),
+  url: z.string().min(1, 'URL обязателен').optional(),
+});
+
+const historyMetricsSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  url: z.string().min(1, 'URL обязателен').optional(),
 });
 
 const idParamSchema = z.object({
@@ -183,6 +188,13 @@ function createApiRouter({ repos }) {
 
   router.delete('/api/history', (_req, res) => {
     res.json({ ok: true, deleted: repos.analyses.clear() });
+  });
+
+  // ----------------------------------------------------------- метрики во времени (графики)
+  router.get('/api/history/metrics', validateQuery(historyMetricsSchema), async (req, res) => {
+    const { limit = 30, url } = req.valid;
+    const series = repos.analyses.metricsSeries({ url: url ?? null, limit });
+    res.json({ ok: true, url: url ?? null, series });
   });
 
   return router;
