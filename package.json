@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
-    "better-sqlite3": "12.11.1",
+    "better-sqlite3": "13.0.3",
     "css-tree": "^3.2.1",
     "csstree-validator": "^4.0.1",
     "dotenv": "^18.0.7",
