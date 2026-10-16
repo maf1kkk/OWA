@@ -1,0 +1,53 @@
+# --- Зависимости ---
+node_modules/
+
+# --- Секреты и локальные данные ---
+.env
+.env.local
+.env.*.local
+data/
+
+# --- База данных (SQLite) ---
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# --- Отчёты и результаты ---
+report.json
+report.md
+report_*.json
+report_*.md
+
+# --- Артефакты тестов и CI ---
+coverage/
+dist/
+build/
+test-results/
+playwright-report/
+.playwright/
+.cache/
+
+# --- Служебное ---
+*.log
+logs/
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+
+# --- IDE ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# --- Исходники для статанализа (локальные) ---
+sources/
+
+# --- Артефакты MCP-серверов разработки (playwright / chrome-devtools MCP) ---
+.playwright-mcp/
+.chrome-devtools-mcp/
+
+# --- Личные/рабочие файлы, не относящиеся к продукту ---
+check.txt
+check2.txt
+console_view.html

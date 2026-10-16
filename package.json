@@ -1,0 +1,52 @@
+{
+  "name": "owa",
+  "version": "1.2.1",
+  "description": "OWA — One-Click Web Analyzer: сбор и анализ метрик производительности веб-приложений",
+  "main": "src/engine.js",
+  "bin": {
+    "owa": "bin/owa.js"
+  },
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "start": "node web/server.js",
+    "analyze": "node bin/owa.js",
+    "mcp": "node mcp/server.js",
+    "test": "node --test \"test/*.test.js\"",
+    "migrate": "node scripts/migrate.js",
+    "check-env": "node scripts/check-env.js"
+  },
+  "keywords": [
+    "performance",
+    "web-vitals",
+    "playwright",
+    "mcp",
+    "cli",
+    "llm"
+  ],
+  "author": "maf1kkk",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maf1kkk/OWA.git"
+  },
+  "homepage": "https://github.com/maf1kkk/OWA#readme",
+  "bugs": {
+    "url": "https://github.com/maf1kkk/OWA/issues"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "12.11.1",
+    "css-tree": "^3.2.1",
+    "csstree-validator": "^4.0.1",
+    "dotenv": "^18.0.7",
+    "espree": "^11.2.0",
+    "express": "^5.3.0",
+    "html-validate": "^10.17.0",
+    "openai": "^7.32.0",
+    "playwright": "^1.63.0",
+    "zod": "^4.6.5"
+  }
+}

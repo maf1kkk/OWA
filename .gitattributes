@@ -1,0 +1,22 @@
+# Всё как LF, кроме батников (Windows требует CRLF)
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Явные дистрибутивные форматы
+*.sh text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sql text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Бинарное
+*.png binary
+*.jpg binary
+*.ico binary
+*.docx binary
