@@ -20,10 +20,21 @@
     "performance",
     "web-vitals",
     "playwright",
-    "lighthouse-alternative"
+    "mcp",
+    "cli",
+    "llm"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "maf1kkk",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maf1kkk/OWA.git"
+  },
+  "homepage": "https://github.com/maf1kkk/OWA#readme",
+  "bugs": {
+    "url": "https://github.com/maf1kkk/OWA/issues"
+  },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "better-sqlite3": "12.11.1",

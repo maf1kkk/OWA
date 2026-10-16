@@ -1,6 +1,25 @@
 # Changelog
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
+Все изменения в этом проекте документируются в этом файле.
+
+## [Unreleased]
+
+- Подготовка к публикации на GitHub:
+  - `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `package.json` (`license: MIT`,
+    `private: true`, `repository`, `homepage`, `bugs`).
+  - `.gitignore` дополнен (`*.db`, `*.db-wal`, `*.db-shm`, `*.db-journal`,
+    `coverage/`, `test-results/`, `.idea/`, `.vscode/`, `sources/`, `*.tsbuildinfo`).
+  - `.env.example` — только плейсхолдеры (без дефолтных логов/URL).
+- Рефакторинг: абстракция AI-провайдера (`src/ai/providers/`), новая переменная
+  `AI_PROVIDER` (дефолт `none`), `GLM_*` поддерживаются как алиасы.
+- CLI: `--baseline <файл.json>` и `--threshold <N>` — сравнение с baseline
+  (exit 0/1 по порогу регрессий).
+- CI: GitHub Actions (`test.yml`, матрица Node 22.16/24), Dependabot,
+  issue templates, бейджи в README.
+- README: дисклеймер «пет-проект, не для продакшена», раздел «Почему OWA»,
+  «Демо», «Как использовать для ИИ-агентов».
+- База данных: улучшена документация, `scripts/migrate.js` работает standalone.
 
 ## [1.2.1] — 2026-10-16
 
