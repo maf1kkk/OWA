@@ -1,8 +1,48 @@
 # OWA — One-Click Web Analyzer
 
+> **Статус:** пет-проект в портфолио. Не для продакшена.
+> **Зачем:** демонстрация работы с Performance API, Playwright, MCP и AI-интеграцией.
+
+[![test](https://github.com/maf1kkk/OWA/actions/workflows/test.yml/badge.svg)](https://github.com/maf1kkk/OWA/actions/workflows/test.yml)
+![Node](https://img.shields.io/badge/node-%3E%3D22.16.0-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
 Автоматизированный сборщик метрик производительности веб-приложений. Вставляешь ссылку — получаешь полный отчёт в консоль, JSON или Markdown.
 
-Альтернатива ручной работе с DevTools Console (Performance API, Long Tasks, пользовательские метрики) — всё делается одной командой.
+## Почему OWA
+
+OWA — это **одна команда**: запуск headless Chromium, сбор реальных метрик (Performance API, Long Tasks, Core Web Vitals, ресурсы, JS-ошибки, пользовательские метрики), и **детерминированная** интерпретация — все выводы вычисляются по фиксированным правилам в `src/interpret.js`, не «выдумываются».
+
+Чем отличается от Lighthouse CI / Unlighthouse / ohmyperf:
+
+- **Детерминированная интерпретация** — LLM не выдумывает метрики; вердикты
+  и рекомендации считаются в самом приложении. Для CI-мониторинга глубже и
+  стабильнее — Lighthouse CI.
+- **MCP-сервер «из коробки»** — ИИ-агент получает `analyze_url` как встроенный
+  инструмент. Вызвать tool дешевле и надёжнее, чем просить агента оценить
+  производительность «из памяти». MCP работает **standalone** (без SQLite,
+  без Express, без `.env`) — `npm run mcp` или `node mcp/server.js`.
+  UI и история анализов — опциональные части, для MCP-сценария не нужны.
+- **Один бинарник** — без облака и аккаунтов. `node bin/owa.js` работает
+  локально; `--json` / `--compact` / `--baseline` — для ИИ-агентов и CI.
+- **Статический анализ кода** (CSS/HTML/JS) в том же отчёте: правила через
+  csstree-validator, html-validate, espree.
+- **Diff-режим** (`--baseline`) — сравнение с сохранённым baseline,
+  регрессии подсвечиваются (exit 1), порог настраивается `--threshold`.
+
+Честно: OWA — не замена Lighthouse CI для продакшн-мониторинга. Это пет-проект
+для демонстрации: как собрать реальные метрики через Playwright и
+интерпретировать их детерминированно, без галлюцинаций.
+
+## Демо
+
+<!-- TODO: вставить asciinema-запись или гифку с реальным запуском.
+     Пример команды для записи:
+       node bin/owa.js https://lolesports.com --selector "#match-widget" --selector "#scoreboard"
+     Записать:  asciinema rec demo.cast
+     Вставить сюда: ![](docs/demo.gif) -->
+
+_Плейсхолдер: здесь будет демонстрация (asciinema/gif)._
 
 ## Требования
 
@@ -52,9 +92,12 @@ node scripts/check-env.js --fix   # проверить и поставить н�
 | `OWA_BROWSER_CHANNEL` | пусто (по умолчанию) — Chromium из кэша Playwright, при его отсутствии системный Chrome, затем Edge; либо явно `chrome` / `msedge` |
 | `OWA_DENY_PRIVATE_TARGETS` | `1` — запретить приватные адреса как цели анализа (public-деплой) |
 | `OWA_MAX_CONCURRENT` | максимум одновременных анализов (по умолч. 2) |
+| `OWA_RATE_LIMIT_MAX` / `OWA_RATE_LIMIT_WINDOW_MS` | rate limit на `/api/*` по IP (по умолч. 20 за 60 с, `0` — отключить) |
 | `OWA_RETENTION_DAYS` | срок хранения анализов и кэша AI (по умолч. 30, `0` — без ограничений) |
-| `GLM_API_KEY`, `GLM_BASE_URL`, `GLM_MODEL` | доступ к LLM (OpenAI-совместимый endpoint), см. раздел «AI-объяснения» |
-| `GLM_TIMEOUT_MS`, `GLM_MAX_TOKENS`, `GLM_TEMPERATURE` | таймаут AI-вызова (по умолч. 30000) и параметры генерации |
+| `AI_PROVIDER` | LLM-провайдер: `openai` / `anthropic` / `ollama` / `glm` / `none` (по умолч. `none`) |
+| `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` | доступ к LLM (любой OpenAI-совместимый endpoint) |
+| `AI_TIMEOUT_MS`, `AI_MAX_TOKENS`, `AI_TEMPERATURE` | таймаут AI-вызова (по умолч. 30000) и параметры генерации |
+| `GLM_API_KEY`, `GLM_BASE_URL`, `GLM_MODEL`, ... | устаревшие алиасы `AI_*` — работают для обратной совместимости |
 
 Сгенерировать bcrypt-хэш пароля:
 
@@ -84,6 +127,9 @@ node bin/owa.js https://example.com --compact
 
 # Видимый браузер + перехват console-логов страницы
 node bin/owa.js https://example.com --headed --console
+
+# Diff-режим: сравнить с сохранённым baseline (exit 1 при регрессиях)
+node bin/owa.js https://example.com --baseline baseline.json --threshold 5
 ```
 
 ### Все опции CLI
@@ -100,11 +146,13 @@ node bin/owa.js https://example.com --headed --console
 | `--headed` | Показать окно браузера |
 | `--console` | Перехватить console-сообщения страницы |
 | `--code` | Добавить в отчёт статический анализ кода (CSS/HTML/JS) |
+| `--baseline <файл>` | Сравнить с сохранённым baseline (JSON от `--out` или `/api/analyze`) |
+| `--threshold <N>` | Порог регрессии в % для `--baseline` (по умолч. 5) |
 
 ### Exit-коды (для автоматизации)
 
 - `0` — метрики в норме
-- `1` — есть проблемы (load > 5 с, > 5 долгих задач, LCP > 4 с, либо ошибки статанализа с `--code`)
+- `1` — есть проблемы (load > 5 с, > 5 долгих задач, LCP > 4 с, либо ошибки статанализа с `--code`, либо регрессии при `--baseline`)
 - `2` — ошибка анализа
 
 ## Что собирается
@@ -184,9 +232,13 @@ src/static-analyzer/
   validators.js            Обёртки: csstree-validator, html-validate, espree
   to-findings.js           Raw -> формат findings (+ severity, rule, location, suggestion)
 src/ai/
-  client.js                Клиент GLM через SDK openai (таймаут 30 с, retry 1× на 5xx)
+  client.js                Клиент OpenAI-совместимого API (таймаут 30 с, retry 1× на 5xx)
   explain.js               Промпт находки, sha256-кэш в ai_responses, explainMissing
-  index.js                 Ленивая конфигурация GLM_* из .env (getAi/resetAi)
+  index.js                 Ленивая конфигурация провайдера из .env (getAi/resetAi)
+  providers/               Абстракция LLM-провайдера (openai-compatible, null)
+    index.js               Реестр: выбор по AI_PROVIDER (дефолт none)
+    openai-compatible.js   OpenAI/GLM/Ollama/любой OpenAI-совместимый endpoint
+    null.js                Заглушка, когда AI не настроен
 src/db/
   index.js                 Открытие SQLite, PRAGMA (WAL), миграции по user_version
   migrations/001_init.sql  Схема: analyses, code_findings, ai_responses, settings
@@ -276,17 +328,30 @@ curl -X POST http://localhost:3210/api/code-analysis \
 (+ аддитивные поля `severity`, `rule`, `location`, `suggestion`), привязываются к
 записи в истории и удаляются каскадно вместе с ней.
 
-## AI-объяснения (GLM 4.5)
+## AI-объяснения (LLM)
 
-Модуль `src/ai/` — объяснение находок статанализа через OpenAI-совместимый API
-(официальный SDK `openai`, модель `glm-4.5`, endpoint в `GLM_BASE_URL`):
+Модуль `src/ai/` объясняет находки статанализа через любой **OpenAI-совместимый
+endpoint** (GLM 4.5 — дефолт, но модуль абстрагирован, см. `src/ai/providers/`):
 
-- **таймаут 30 с** (`GLM_TIMEOUT_MS`), **retry ровно 1 раз только на 5xx**;
+- **таймаут 30 с** (`AI_TIMEOUT_MS`), **retry ровно 1 раз только на 5xx**;
 - ошибки нормализуются: `{ error: 'AI_TIMEOUT' }` (HTTP 504) или
   `{ error: 'AI_ERROR' }` (HTTP 502); нет ключа — `400 AI_NOT_CONFIGURED`;
 - **кэш в SQLite**: ключ `sha256(model + prompt)` в таблице `ai_responses` —
   повторный запрос тех же данных отдаётся из кэша без обращения к LLM;
 - промпты и ответы LLM не логируются, ключ — только в `.env` (в git не попадает).
+
+Провайдер выбирается переменной `AI_PROVIDER`:
+
+| Значение | Что делает |
+|---|---|
+| `none` (дефолт) | AI выключен — проект работает без LLM, `ai: { configured: false }` |
+| `openai` | OpenAI endpoint (`AI_API_KEY` + `AI_BASE_URL` + `AI_MODEL`) |
+| `anthropic` | alias → OpenAI-совместимый (через прокси) |
+| `ollama` | локальный Ollama (`http://localhost:11434/v1`) |
+| `glm` | GLM (Zhipu) — OpenAI-совместимый, дефолты `AI_BASE_URL`/`AI_MODEL` |
+
+Старые переменные `GLM_API_KEY`/`GLM_BASE_URL`/`GLM_MODEL` поддерживаются как
+алиасы (с warning в лог), чтобы не ломать существующие деплои.
 
 Два способа получить объяснения:
 
@@ -383,6 +448,6 @@ node --test test/cli.test.js          # CLI (есть сетевые тесты)
 node --test test/mcp.test.js          # MCP-сервер (есть сетевые тесты)
 ```
 
-76 тестов: граничные случаи, стабильность схемы JSON, обработка недоступных сайтов / невалидных URL / несуществующих селекторов, живучесть MCP-сервера, миграции и репозитории SQLite, HTTP-роуты (история, валидация, формат ошибок), правила статанализа CSS/HTML/JS, полный цикл сессий `POST /api/code-analysis` и AI-слой (кэш, retry на 5xx, таймаут, коды ошибок) на мок-сервере GLM.
+76+ тестов: граничные случаи, стабильность схемы JSON, обработка недоступных сайтов / невалидных URL / несуществующих селекторов, живучесть MCP-сервера, миграции и репозитории SQLite, HTTP-роуты (история, валидация, формат ошибок), правила статанализа CSS/HTML/JS, полный цикл сессий `POST /api/code-analysis`, AI-слой (кэш, retry на 5xx, таймаут, коды ошибок) на мок-сервере, и diff-режим `--baseline`.
 
 > Сетевые тесты CLI/MCP требуют установленного Chromium (`npx playwright install chromium`) — `start.bat` делает это сам.

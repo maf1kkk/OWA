@@ -16,14 +16,17 @@
  *   --timeout <мс>         таймаут навигации (по умолч. 60000)
  *   --headed               запуск с видимым окном браузера
  *   --console              перехватывать console-сообщения страницы
- *   --code                 статический анализ кода (CSS/HTML/JS) в отчёт
- */
+  *   --code                 статический анализ кода (CSS/HTML/JS) в отчёт
+  *   --baseline <файл.json> сравнить с сохранённым baseline (exit 1 при регрессиях)
+  *   --threshold <N>        порог регрессии в % для --baseline (по умолч. 5)
+  */
 const fs = require('fs');
 const path = require('path');
 const { analyze } = require('../src/engine');
 const { analyzeCode } = require('../src/static-analyzer');
 const { printReport, toMarkdown } = require('../src/report');
 const { buildCompact } = require('../src/interpret');
+const { diffWithBaseline, printDiff } = require('../src/diff');
 
 function parseArgs(argv) {
   const args = { selectors: [], _: [] };
@@ -48,6 +51,8 @@ function parseArgs(argv) {
       case '--headed': args.headed = true; break;
       case '--console': args.consoleLogs = true; break;
       case '--code': args.code = true; break;
+      case '--baseline': args.baseline = argv[++i]; break;
+      case '--threshold': args.threshold = parseFloat(argv[++i]); break;
       case '--help':
       case '-h':
         args.help = true; break;
@@ -74,7 +79,9 @@ if (args.help || args._.length === 0) {
   --timeout <мс>       таймаут навигации (по умолч. 60000)
   --headed             видимый браузер
   --console            перехват console-логов страницы
-  --code               статический анализ кода (CSS/HTML/JS) в отчёт`);
+  --code               статический анализ кода (CSS/HTML/JS) в отчёт
+  --baseline <файл>    сравнить с сохранённым baseline (exit 1 при регрессиях)
+  --threshold <N>      порог регрессии в % для --baseline (по умолч. 5)`);
   process.exit(0);
 }
 
@@ -125,14 +132,37 @@ if (!/^https?:\/\//i.test(url)) {
       console.log(`Итог: ${s.headline} (оценка ${s.score}/100)`);
     }
 
-    // Exit-код для ИИ-агентов: 0 = ок, 1 = есть серьёзные проблемы
+    // Diff-режим: сравнение с baseline (файл JSON, сохранённый через --out).
+    // При регрессиях (метрика стала хуже на >= threshold%) exit-код 1.
+    let hasRegression = false;
+    if (args.baseline) {
+      let baseline;
+      try {
+        baseline = JSON.parse(fs.readFileSync(path.resolve(args.baseline), 'utf8'));
+      } catch (err) {
+        console.error(`Не удалось прочитать baseline: ${err.message}`);
+        process.exit(2);
+      }
+      const thresholdPct = Number.isFinite(args.threshold) ? args.threshold : 5;
+      const diff = diffWithBaseline(data, baseline, thresholdPct);
+      // Выводим diff в JSON-режиме как объект, в обычном — таблицей
+      if (args.json) {
+        console.log(JSON.stringify({ diff }, null, 2));
+      } else {
+        hasRegression = printDiff(diff, { thresholdPct }) > 0;
+      }
+      // В JSON-режиме регрессии считаем из diff.regressions
+      if (args.json) hasRegression = diff.regressions > 0;
+    }
+
+    // Exit-код для ИИ-агентов: 0 = ок, 1 = есть серьёзные проблемы или регрессии
     const m = data.metrics;
     const bad =
       (m.legacyTiming && m.legacyTiming.loadTime > 5000) ||
       (m.longTasks && m.longTasks.count > 5) ||
       (m.vitals.lcpMs !== null && m.vitals.lcpMs > 4000) ||
       (codeResult && codeResult.findings.some((f) => f.severity === 'error'));
-    process.exit(bad ? 1 : 0);
+    process.exit(hasRegression || bad ? 1 : 0);
   } catch (err) {
     if (args.json) {
       console.log(JSON.stringify({ error: String(err && err.message || err) }, null, 2));
