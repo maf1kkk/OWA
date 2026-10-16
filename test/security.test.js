@@ -91,18 +91,16 @@ test('security: ресурсы со страницы — публичные http
 });
 
 test('security: OWA_DENY_PRIVATE_TARGETS — режим для публичного развёртывания', () => {
-  // Флаги читаются при загрузке модуля, поэтому проверяем через перезагрузку
-  const path = require.resolve('../src/security');
+  // Флаги читаются лениво при каждом вызове checkTarget, поэтому
+  // просто меняем env без перезагрузки модуля.
   const saved = process.env.OWA_DENY_PRIVATE_TARGETS;
   try {
     process.env.OWA_DENY_PRIVATE_TARGETS = '1';
-    delete require.cache[path];
     const fresh = require('../src/security');
     assert.equal(fresh.checkTarget('http://127.0.0.1:8080/').ok, false, 'в жёстком режиме localhost запрещён');
     assert.equal(fresh.checkTarget('https://example.com').ok, true, 'публичный адрес всё ещё доступен');
   } finally {
     process.env.OWA_DENY_PRIVATE_TARGETS = saved;
-    delete require.cache[path];
     require('../src/security');
   }
 });

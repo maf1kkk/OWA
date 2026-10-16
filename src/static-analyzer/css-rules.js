@@ -131,7 +131,7 @@ function analyzeCss(css, fileUrl, ctx = {}) {
   const dups = [...selectorCount.entries()].filter(([, v]) => v.count > 1);
   if (dups.length) {
     const total = dups.reduce((s, [, v]) => s + v.count - 1, 0);
-    const preview = dups.slice(0, 3).map(([sel]) => `${sel} (${dups.find(([s]) => s === sel)[1].count}x)`);
+    const preview = dups.slice(0, 3).map(([sel, v]) => `${sel} (${v.count}x)`);
     raws.push({
       rule: 'css-duplicate-selector',
       severity: 'warning',

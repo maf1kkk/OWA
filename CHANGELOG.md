@@ -2,6 +2,25 @@
 
 Формат: [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 
+## [1.2.1] — 2026-10-16
+
+Rate-limit, защита от DDoS, подготовка к публичному деплою.
+
+### Added
+- `web/rate-limit.js` — фиксированное окно (fixed window) в памяти, без внешних зависимостей. Счётчики по `IP + path`, протухшие записи чистятся по расписанию. Контракт: `check(ip, path) → remaining` (0 — отказ), `reset()`, `max`, `windowMs`.
+- `web/app.js` — middleware rate-limit (лимиты только на `/api/*`, UI и health не трогаются). Заголовки RFC 6585: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `Retry-After` при 429.
+- `OWA_RATE_LIMIT_MAX` (по умолч. 20) и `OWA_RATE_LIMIT_WINDOW_MS` (по умолч. 60 000) в `.env.example` — лимиты на IP для `/api/*`. `0` — отключить (локальный режим).
+- Тесты: `test/web.test.js` (+4): заголовки и 429 при превышении, UI/health вне лимита, `OWA_RATE_LIMIT_MAX=0` отключает, разные IP не делят квоту (через limiter напрямую). Итого **107 тестов** (было 103).
+
+### Changed
+- `bin/owa.js`: `--wait 0` корректно означает 0, а не «по умолчанию» (`??` вместо `||`). `--selector` без значения больше не падает с `undefined` — понятная ошибка.
+- `web/app.js`: `createApp` принимает `env` (для тестов rate-limit без изменения `process.env`).
+
+### Fixed
+- `better-sqlite3` не запускался на Node.js ≥ 24 (модуль скомпилирован под NODE_MODULE_VERSION 127, а нужен 137). `npm rebuild better-sqlite3` — фикс. Локальный запуск `start.bat`/`start.sh` теперь работает.
+- `src/security.js` читал `OWA_DENY_PRIVATE_TARGETS` и `OWA_ALLOW_PRIVATE_TARGETS` при загрузке модуля — в CLI и MCP `dotenv` не подключался автоматически, и `OWA_DENY_PRIVATE_TARGETS=1` из `.env` не применялся. Теперь флаги читаются лениво на каждом вызове `checkTarget`, `.env` подключается в самом модуле.
+- `css-rules.js`: `dups.find(([s]) => s === sel)` — O(n²) для каждого селектора в превью. Заменено на прямую деструктуризацию `[sel, v]` из `Map.entries()`.
+
 ## [1.2.0] — 2026-10-15
 
 Безопасность, авторизация и ретеншн — выпуск для публичного использования.

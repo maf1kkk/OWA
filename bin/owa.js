@@ -34,7 +34,15 @@ function parseArgs(argv) {
       case '--compact': args.compact = true; args.json = true; break;
       case '--out': args.out = argv[++i]; break;
       case '--md': args.md = argv[++i]; break;
-      case '--selector': args.selectors.push(argv[++i]); break;
+      case '--selector': {
+        const sel = argv[++i];
+        if (sel === undefined || sel.startsWith('--')) {
+          console.error('Опция --selector требует значение (CSS-селектор)');
+          process.exit(2);
+        }
+        args.selectors.push(sel);
+        break;
+      }
       case '--wait': args.wait = parseInt(argv[++i], 10); break;
       case '--timeout': args.timeout = parseInt(argv[++i], 10); break;
       case '--headed': args.headed = true; break;
@@ -79,8 +87,8 @@ if (!/^https?:\/\//i.test(url)) {
 (async () => {
   try {
     const data = await analyze(url, {
-      waitAfterLoad: args.wait || 5000,
-      timeout: args.timeout || 60000,
+      waitAfterLoad: args.wait ?? 5000,
+      timeout: args.timeout ?? 60000,
       widgetSelectors: args.selectors.length ? args.selectors : null,
       headless: !args.headed,
       consoleLogs: !!args.consoleLogs,

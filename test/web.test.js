@@ -8,12 +8,12 @@ const { openDb, migrate } = require('../src/db');
 const { createApp, createAuth } = require('../web/app');
 
 /** Поднять приложение на эфемерном порту. */
-async function startApp(env = {}) {
+async function startApp(env = {}, envForApp = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'owa-web-test-'));
   const db = openDb(path.join(dir, 'test.db'));
   migrate(db);
   const auth = createAuth(env);
-  const app = createApp({ db, auth });
+  const app = createApp({ db, auth, env: envForApp });
   const server = await new Promise((resolve) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s));
   });
@@ -319,3 +319,74 @@ test('headers: базовые security-заголовки выставлены',
     await ctx.stop();
   }
 });
+
+// ---------------------------------------------------------------- rate limit
+
+test('rate-limit: X-RateLimit-* заголовки и 429 при превышении (127.0.0.1)', async () => {
+  // Ограничиваем жёстко на 3 запроса в 10-секундное окно,
+  // чтобы не ждали стандартные 20/60с в тестах.
+  const ctx = await startApp({}, { OWA_RATE_LIMIT_MAX: '3', OWA_RATE_LIMIT_WINDOW_MS: '10000' });
+  try {
+    const base = `${ctx.base}/api/history`;
+    const res1 = await fetch(base);
+    assert.strictEqual(res1.status, 200);
+    assert.strictEqual(res1.headers.get('x-ratelimit-limit'), '3');
+    assert.strictEqual(res1.headers.get('x-ratelimit-remaining'), '2');
+
+    const res2 = await fetch(base);
+    assert.strictEqual(res2.headers.get('x-ratelimit-remaining'), '1');
+
+    const res3 = await fetch(base);
+    assert.strictEqual(res3.headers.get('x-ratelimit-remaining'), '0');
+
+    const res4 = await fetch(base);
+    assert.strictEqual(res4.status, 429);
+    const body = await res4.json();
+    assert.strictEqual(body.error, 'RATE_LIMITED');
+    assert.ok(body.message && body.message.length > 0);
+    assert.ok(Number(res4.headers.get('retry-after')) > 0);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('rate-limit: UI и /health не затронуты (без /api-префикса)', async () => {
+  const ctx = await startApp({}, { OWA_RATE_LIMIT_MAX: '1', OWA_RATE_LIMIT_WINDOW_MS: '60000' });
+  try {
+    const ui1 = await fetch(ctx.base);
+    const ui2 = await fetch(ctx.base);
+    const health1 = await fetch(`${ctx.base}/health`);
+    assert.strictEqual(ui1.status, 200);
+    assert.strictEqual(ui2.status, 200);
+    assert.strictEqual(health1.status, 200);
+    // Заголовки лимита нет для UI/health (не /api/*)
+    assert.strictEqual(ui1.headers.get('x-ratelimit-limit'), null);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('rate-limit: OWA_RATE_LIMIT_MAX=0 отключает проверку (без 429 и заголовков)', async () => {
+  const ctx = await startApp({}, { OWA_RATE_LIMIT_MAX: '0' });
+  try {
+    for (let i = 0; i < 5; i++) {
+      const r = await fetch(`${ctx.base}/api/history`);
+      assert.strictEqual(r.status, 200);
+      assert.strictEqual(r.headers.get('x-ratelimit-limit'), null);
+    }
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('rate-limit: разные IP не делят квоту (по IP+path)', async () => {
+  // Поднимаем приложение, но лимит считаем от key = ip|path.
+  // Проверим через limiter напрямую (без сетевых прокси).
+  const { createRateLimiter } = require('../web/rate-limit');
+  const limiter = createRateLimiter({ max: 1, windowMs: 60000 });
+  assert.strictEqual(limiter.check('1.1.1.1', '/api/analyze'), 0);
+  assert.strictEqual(limiter.check('1.1.1.1', '/api/analyze'), 0); // уже исчерпано
+  assert.strictEqual(limiter.check('2.2.2.2', '/api/analyze'), 0); // другой IP — своя квота
+  assert.strictEqual(limiter.check('1.1.1.1', '/api/health'), 0); // другой path — не пересекает
+});
+

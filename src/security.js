@@ -23,8 +23,21 @@
  */
 'use strict';
 
-const DENY_PRIVATE = process.env.OWA_DENY_PRIVATE_TARGETS === '1';
-const ALLOW_PRIVATE = process.env.OWA_ALLOW_PRIVATE_TARGETS === '1';
+const path = require('path');
+
+// Читаем .env здесь — модуль используется и из CLI (bin/owa.js), и из MCP,
+// и из fetch-sources.js; в CLI/MCP dotenv не подключается автоматически.
+// Если .env уже загружен web/server.js, повторная инициализация dotenv безопасна
+// (dotenv не перезаписывает существующие переменные).
+require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
+
+function denyPrivate() {
+  return process.env.OWA_DENY_PRIVATE_TARGETS === '1';
+}
+
+function allowPrivate() {
+  return process.env.OWA_ALLOW_PRIVATE_TARGETS === '1';
+}
 
 /** dotted-quad в массив октетов, либо null. */
 function toIPv4(host) {
@@ -115,7 +128,7 @@ function checkTarget(url) {
     return { ok: false, reason: 'parse' };
   }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false, reason: 'scheme' };
-  if (DENY_PRIVATE && isPrivateHost(u.hostname)) return { ok: false, reason: 'private' };
+  if (denyPrivate() && isPrivateHost(u.hostname)) return { ok: false, reason: 'private' };
   return { ok: true };
 }
 
@@ -154,5 +167,10 @@ module.exports = {
   isPrivateHost,
 };
 
-// флаг доступности приватных адресов наружу — для логов/диагностики
-module.exports.ALLOW_PRIVATE = ALLOW_PRIVATE && !DENY_PRIVATE;
+// Флаг доступности приватных адресов наружу — для логов/диагностики.
+// Ленивый getter: значение вычисляется на каждом обращении, чтобы
+// изменения env в тестах подхватывались.
+Object.defineProperty(module.exports, 'ALLOW_PRIVATE', {
+  enumerable: true,
+  get: () => allowPrivate() && !denyPrivate(),
+});

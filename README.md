@@ -192,10 +192,11 @@ src/db/
   migrations/001_init.sql  Схема: analyses, code_findings, ai_responses, settings
   migrations/002_code_sessions.sql  Сессии статанализа (продолжение анализа)
   repositories/            Тонкие обёртки над prepared statements
-mcp/server.js              MCP-сервер (stdio): инструмент analyze_url для ИИ-агентов
-web/
-  server.js                Точка входа: .env, БД, listen
-  app.js                   Фабрика Express-приложения
+  mcp/server.js              MCP-сервер (stdio): инструмент analyze_url для ИИ-агентов
+  web/
+    server.js                Точка входа: .env, БД, listen
+    app.js                   Фабрика Express-приложения (+ rate-limit middleware)
+    rate-limit.js            Rate limit в памяти (фиксированное окно по IP+path)
   routes/api.js            HTTP API (см. раздел «HTTP API»)
   routes/code-analysis.js  POST /api/code-analysis (сессии статанализа)
   routes/ai.js             POST /api/ai/explain (AI-объяснения находок)
@@ -364,6 +365,14 @@ metadata-сервиз. Распознаются и обфусцированны�
 `OWA_MAX_CONCURRENT` одновременных запусков (дальше — `429`), видимый браузер
 через API только с `OWA_ALLOW_HEADED=1`, тело запроса ≤ 1 МБ, наружу не
 утекают внутренние сообщения об ошибках.
+
+**Rate limit** (защита от DDoS для публичного деплоя):
+по умолчанию `20` запросов `/api/*` на IP за `60` секунд
+(`OWA_RATE_LIMIT_MAX` / `OWA_RATE_LIMIT_WINDOW_MS`), дальше `429` с заголовком
+`Retry-After`. Заголовки `X-RateLimit-Limit` / `X-RateLimit-Remaining`
+отдаются на каждый ответ, чтобы клиенты (включая ИИ-агентов) планировали
+повторы. `OWA_RATE_LIMIT_MAX=0` — отключить (локальный режим).
+Лимит не касается UI и `/health` (мониторинг должен работать всегда).
 
 ## Тесты
 
