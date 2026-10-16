@@ -42,7 +42,7 @@ function createAiRouter({ repos }) {
 
     if (!result.ok) {
       if (result.error === 'AI_NOT_CONFIGURED') {
-        throw new HttpError(400, 'AI_NOT_CONFIGURED', 'GLM_API_KEY не задан в .env');
+        throw new HttpError(400, 'AI_NOT_CONFIGURED', 'AI-провайдер не настроен (AI_API_KEY или GLM_API_KEY)');
       }
       const status = result.error === 'AI_TIMEOUT' ? 504 : 502;
       return res.status(status).json({

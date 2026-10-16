@@ -72,7 +72,6 @@ function createCodeAnalysisRouter({ repos }) {
       throw err;
     }
 
-    // AI-объяснения (по флагу): кэш в ai_responses, без ключа — просто пропуск
     if (body.explain) {
       const ai = getAi();
       if (!ai.configured) {

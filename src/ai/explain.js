@@ -35,7 +35,7 @@ function promptHash(model, messages) {
 }
 
 /**
- * Объяснить одну находку (сначала кэш, затем GLM).
+ * Объяснить одну находку (сначала кэш, затем LLM-провайдер).
  * @returns {Promise<{ok:true, text, cached:boolean}|{ok:false, error:string}>}
  */
 async function explainFinding(finding, { ai, repos }) {
@@ -45,9 +45,8 @@ async function explainFinding(finding, { ai, repos }) {
   const cached = repos.aiResponses.get(hash);
   if (cached) return { ok: true, text: cached.response, cached: true };
 
-  const res = await complete(ai.client, {
+  const res = await ai.complete(messages, {
     model: ai.model,
-    messages,
     maxTokens: ai.maxTokens,
     temperature: ai.temperature,
   });
@@ -57,8 +56,8 @@ async function explainFinding(finding, { ai, repos }) {
     promptHash: hash,
     model: ai.model,
     response: res.text,
-    tokensIn: res.tokensIn,
-    tokensOut: res.tokensOut,
+    tokensIn: null,
+    tokensOut: null,
   });
   return { ok: true, text: res.text, cached: false };
 }
@@ -72,7 +71,6 @@ async function explainFinding(finding, { ai, repos }) {
  */
 async function explainMissing(rows, { ai, repos, force = false }) {
   if (!ai || !ai.client) return { ok: false, error: 'AI_NOT_CONFIGURED', explained: 0, cached: 0 };
-
   const targets = force ? rows : rows.filter((r) => !r.aiExplanation);
   let explained = 0;
   let cached = 0;

@@ -11,7 +11,13 @@ const path = require('node:path');
 
 // CLI и MCP-сервер не поднимают web/server.js, поэтому .env грузим здесь —
 // иначе OWA_BROWSER_CHANNEL из .env не виден им. Реальный env приоритетнее.
-require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
+// Если .env нет (standalone-режим, CI без .env) — dotenv молча пропускает,
+// browser.js падает не на .env, а на запуске браузера с понятным hint.
+try {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
+} catch (e) {
+  // .env отсутствует или не читается — не критично, используем process.env
+}
 
 const { chromium } = require('playwright');
 
