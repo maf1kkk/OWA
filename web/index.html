@@ -432,6 +432,31 @@ function render(url, d) {
     html += `</table></div>`;
   }
 
+  // Водопад ресурсов
+  const wf = m.resources.waterfall || [];
+  if (wf.length) {
+    const loadMs = Math.max(1, (m.legacyTiming && m.legacyTiming.loadTime) || (m.navigation && m.navigation.loadEvent) || Math.max(...wf.map((r) => r.end)));
+    html += `<div class="card"><h2>Водопад ресурсов (${wf.length} шт)</h2>
+    <div style="padding:12px 16px 4px; font-family:var(--mono);font-size:11px;color:var(--muted)">горизонталь — время загрузки ресурса (мс), цвет — тип</div>
+    <div style="padding:0 16px 14px; display:flex; flex-direction:column; gap:4px; max-height:420px; overflow-y:auto;">`;
+    const typeColor = { script: '#f85149', link: '#d29922', img: '#3fb950', font: '#a371f7', fetch: '#6cb6ff', other: '#8b949e', xhr: '#ff7b72', beacon: '#8b949e', css: '#d29922' };
+    for (const r of wf) {
+      const color = typeColor[r.type] || typeColor.other;
+      const left = (r.start / loadMs) * 100;
+      const width = Math.max(2, ((r.end - r.start) / loadMs) * 100);
+      const kb = (r.size >= 1024 ? (r.size / 1024).toFixed(1) + ' КБ' : r.size + ' Б');
+      html += `<div style="display:flex;align-items:center;gap:10px">
+        <div style="width:46%;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:11px;flex-shrink:0">${esc(r.type)}</div>
+        <div style="flex:1;min-width:0;position:relative;height:10px;border-radius:4px;background:rgba(255,255,255,.04);overflow:hidden" title="${esc(r.name)} · ${r.end - r.start} мс · ${kb}">
+          <div style="position:absolute;left:${left}%;width:${width}%;height:100%;background:${color};opacity:.9"></div>
+          <div style="position:absolute;left:${left}%;top:-20px;font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap">${r.start} мс</div>
+        </div>
+        <div style="width:34%;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:11px;flex-shrink:0">${esc(r.name)}</div>
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+
   $('result').innerHTML = html;
 
   const compact = { schemaVersion: 1, tool: 'owa', url: d.meta.url, summary: s, keyMetrics: {

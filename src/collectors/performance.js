@@ -75,6 +75,19 @@ function collect() {
           size: r.transferSize || 0,
           duration: Math.round(r.duration),
         })),
+      // Водопад загрузки: начало и конец каждого ресурса, мс от навигации.
+      // Лимит 40 — чтобы не раздувать отчёт и график.
+      waterfall: resources
+        .slice()
+        .sort((a, b) => a.startTime - b.startTime)
+        .slice(0, 40)
+        .map((r) => ({
+          name: r.name,
+          type: r.initiatorType || 'other',
+          start: Math.round(r.startTime),
+          end: Math.round(r.startTime + r.duration),
+          size: r.transferSize || 0,
+        })),
     },
   };
 }

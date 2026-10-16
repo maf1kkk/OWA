@@ -169,6 +169,13 @@ function createApiRouter({ repos }) {
     res.json({ ok: true, items, total });
   });
 
+  // ----------------------------------------------------------- метрики во времени (графики)
+  router.get('/api/history/metrics', validateQuery(historyMetricsSchema), async (req, res) => {
+    const { limit = 30, url } = req.valid;
+    const series = repos.analyses.metricsSeries({ url: url ?? null, limit });
+    res.json({ ok: true, url: url ?? null, series });
+  });
+
   router.get('/api/history/:id', validateParams(idParamSchema), (req, res) => {
     const analysis = repos.analyses.get(req.valid.id);
     if (!analysis) {

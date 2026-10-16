@@ -20,11 +20,22 @@
   давали фейковые «6925 мс».
 - `bin/owa.js`: `--json --baseline` выводит один JSON-объект с полем `diff`
   (раньше — два последовательных JSON в stdout, невалидный поток).
+- `web/routes/api.js`: `/api/history/metrics` перенесён перед
+  `/api/history/:id`, иначе Express ловил `metrics` как параметр `id`.
 
 ### Changed
 - `customWidgets.explicitSelectors` — новые метки в отчёте: явные селекторы
   (точный замер) отделены от авто-детекта (best-effort). Совместимость:
   `results` и `autoDetectedSelectors` на месте.
+
+### Новое (графики и история)
+- `GET /api/history/metrics` — метрики во времени (оценка, LCP/FCP/TTFB,
+  CLS, TBT, ресурсы, Long Tasks) по всем сайтам или по конкретному URL.
+- Веб-UI: вкладка «История» со списком анализов и последними 30 точками по
+  каждой метрике (графики через Chart.js).
+- `src/collectors/performance.js`: водопад загрузки ресурсов
+  (`metrics.resources.waterfall`) — начало/конец каждого ресурса,
+  секция «Водопад ресурсов» на странице отчёта.
 
 ### Подготовка к публикации на GitHub
   - `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `package.json` (`license: MIT`,
