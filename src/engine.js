@@ -92,6 +92,10 @@ async function analyze(url, options = {}) {
     const widgetResults = { ...autoResults, ...explicitResults };
 
     const perfData = await page.evaluate(perf.collectScript);
+    // Перед сбором метрик форсируем кадр: наблюдатели (longtask, LCP, CLS)
+    // отдают записи на шаге рендеринга, и без этого часть метрик молча
+    // пропадала на страницах, которые после load больше не рисуют.
+    await page.evaluate(longtasks.flushScript).catch(() => {});
     const longTaskData = await page.evaluate(longtasks.collectScript);
     const vitalsData = await page.evaluate(vitals.collectScript);
 

@@ -41,4 +41,20 @@ module.exports = {
       tasks: tasks.slice(0, 20),
     };
   })()`,
+
+  /**
+   * Форсирует доставку записей PerformanceObserver.
+   *
+   * Наблюдатели (longtask, LCP, layout-shift) отдают записи на шаге
+   * рендеринга. Если страница после load больше не рисует (типично для
+   * статики в headless), колбэк может не вызваться вовсе — метрика молча
+   * пропадала, а форма отчёта «плавала» между прогонами. Два кадра + пауза
+   * гарантируют, что очередь наблюдателя разобрана до сбора метрик.
+   */
+  flushScript: `(async () => {
+    await new Promise((r) => requestAnimationFrame(() => r()));
+    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => requestAnimationFrame(() => r()));
+    return true;
+  })()`,
 };
