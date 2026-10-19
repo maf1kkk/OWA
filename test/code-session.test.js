@@ -149,6 +149,12 @@ test('POST /api/code-analysis: РїРѕР»РЅС‹Р№ С†РёРєР» СЃ
   process.env.GLM_API_KEY = 'test-key-not-real';
   process.env.GLM_BASE_URL = aiMock.base;
   process.env.GLM_MODEL = 'glm-4.5';
+  // AI_* имеют приоритет над GLM_* — задаём их тоже, иначе запрос уйдёт
+  // на реальный API из локального .env, а не в мок.
+  process.env.AI_PROVIDER = 'openai';
+  process.env.AI_API_KEY = 'test-key-not-real';
+  process.env.AI_BASE_URL = aiMock.base;
+  process.env.AI_MODEL = 'glm-4.5';
   resetAi();
   try {
     // --- РЁР°Рі 1: СЃРѕР·РґР°РЅРёРµ СЃРµСЃСЃРёРё (fetch + Р°РЅР°Р»РёР· HTML)
@@ -249,6 +255,10 @@ test('POST /api/code-analysis: РїРѕР»РЅС‹Р№ С†РёРєР» СЃ
     delete process.env.GLM_API_KEY;
     delete process.env.GLM_BASE_URL;
     delete process.env.GLM_MODEL;
+    delete process.env.AI_PROVIDER;
+    delete process.env.AI_API_KEY;
+    delete process.env.AI_BASE_URL;
+    delete process.env.AI_MODEL;
     resetAi();
     await aiMock.close();
     await app.stop();

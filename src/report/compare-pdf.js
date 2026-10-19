@@ -188,10 +188,30 @@ async function metricsChartPng(result) {
 }
 
 /** Собрать HTML сравнительного отчёта. */
-function buildCompareHtml(result, charts) {
+function buildCompareHtml(result, charts, opts = {}) {
   const template = fs.readFileSync(path.join(TEMPLATES_DIR, 'compare.html'), 'utf8');
   const styles = fs.readFileSync(path.join(TEMPLATES_DIR, 'styles.css'), 'utf8');
   const competitors = result.competitors.map((c) => c.url).join(',');
+
+  const narrative = opts.narrative;
+  let nSummary = '';
+  let nPlan = '';
+  if (narrative) {
+    if (narrative.summary) nSummary = '<p>' + esc(narrative.summary) + '</p>';
+    if (Array.isArray(narrative.focus) && narrative.focus.length) {
+      nSummary += '<ul style="margin:0 0 8px 18px">';
+      for (const f of narrative.focus) nSummary += '<li>' + esc(f) + '</li>';
+      nSummary += '</ul>';
+    }
+    if (Array.isArray(narrative.plan) && narrative.plan.length) {
+      nPlan = '<h3 style="font-size:11pt;margin-top:12px">План работ</h3><table>'
+        + '<tr><th style="width:40%">Что сделать</th><th>Зачем</th><th style="width:60px">Трудоёмкость</th></tr>';
+      for (const p of narrative.plan) {
+        nPlan += '<tr><td>' + esc(p.title) + '</td><td>' + esc(p.why) + '</td><td class="num">' + esc(p.effort || '') + '</td></tr>';
+      }
+      nPlan += '</table>';
+    }
+  }
 
   return template
     .replace('__STYLES__', styles)
@@ -206,6 +226,8 @@ function buildCompareHtml(result, charts) {
     .replace('__METRIC_ROWS__', metricRows(result))
     .replace('__BARS_CHART__', charts.bars)
     .replace('__METRICS_CHART__', charts.metrics)
+    .replace('__NARRATIVE_SUMMARY__', nSummary)
+    .replace('__NARRATIVE_PLAN__', nPlan)
     .replace('__CONCLUSIONS__', conclusions(result));
 }
 
@@ -213,15 +235,17 @@ function buildCompareHtml(result, charts) {
  * Сгенерировать comparative-PDF.
  * @param {object} result — результат compareSites
  * @param {string} outPath
+ * @param {object} [opts]
+ * @param {object} [opts.narrative] — клиентский текст (AI или детерминированный)
  * @returns {Promise<{path: string, bytes: number, durationMs: number}>}
  */
-async function generateComparePdf(result, outPath) {
+async function generateComparePdf(result, outPath, opts = {}) {
   const started = Date.now();
   const charts = {
     bars: await barsChartPng(result),
     metrics: await metricsChartPng(result),
   };
-  const html = buildCompareHtml(result, charts);
+  const html = buildCompareHtml(result, charts, opts);
 
   const browser = await launchBrowser(true);
   try {

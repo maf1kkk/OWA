@@ -32,6 +32,10 @@ function createOpenAICompatibleProvider(cfg = {}) {
   const model = cfg.model || 'gpt-4o-mini';
   const maxTokens = Number(cfg.maxTokens || 2000);
   const temperature = Number(cfg.temperature !== undefined ? cfg.temperature : 0.3);
+  // GLM-4.5: режим размышления по умолчанию включён — он медленный и тратит
+  // токены. AI_THINKING=0 выключает его (по умолчанию выключаем для отчётов).
+  const thinkingEnabled = String(cfg.thinking !== undefined ? cfg.thinking : process.env.AI_THINKING || '0') === '1';
+  const extraBody = thinkingEnabled ? undefined : { thinking: { type: 'disabled' } };
 
   const provider = {
     name: cfg.providerName || 'openai-compatible',
@@ -39,6 +43,7 @@ function createOpenAICompatibleProvider(cfg = {}) {
     get model() { return model; },
     get maxTokens() { return maxTokens; },
     get temperature() { return temperature; },
+    get thinkingEnabled() { return thinkingEnabled; },
     client: c,
     async complete(messages, opts = {}) {
       const res = await completeRaw(c, {
@@ -46,6 +51,7 @@ function createOpenAICompatibleProvider(cfg = {}) {
         messages,
         maxTokens: opts.maxTokens || maxTokens,
         temperature: opts.temperature !== undefined ? opts.temperature : temperature,
+        extraBody: opts.extraBody !== undefined ? opts.extraBody : extraBody,
       });
       // Нормализуем к интерфейсу провайдера, сохраняя токены для кэша
       if (res.ok) {

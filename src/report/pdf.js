@@ -217,13 +217,49 @@ async function radarChartPng(result) {
   });
 }
 
+/** Блок «Резюме для руководства» + план работ + ограничения (AI или детерминированный). */
+function narrativeBlocks(narrative) {
+  if (!narrative) return { summary: '', focus: '', plan: '', limitations: '' };
+
+  const summary = narrative.summary
+    ? '<p>' + esc(narrative.summary) + '</p>'
+    : '';
+
+  let focus = '';
+  if (Array.isArray(narrative.focus) && narrative.focus.length) {
+    focus = '<h3 style="font-size:11pt;margin-top:14px">Главное, на что обратить внимание</h3><ul style="margin:0 0 8px 18px">';
+    for (const f of narrative.focus) focus += '<li>' + esc(f) + '</li>';
+    focus += '</ul>';
+  }
+
+  let plan = '';
+  if (Array.isArray(narrative.plan) && narrative.plan.length) {
+    plan = '<h3 style="font-size:11pt;margin-top:14px">План работ</h3><table>'
+      + '<tr><th style="width:40%">Что сделать</th><th>Зачем</th><th style="width:60px">Трудоёмкость</th></tr>';
+    for (const p of narrative.plan) {
+      plan += '<tr><td>' + esc(p.title) + '</td><td>' + esc(p.why) + '</td><td class="num">' + esc(p.effort || '') + '</td></tr>';
+    }
+    plan += '</table>';
+  }
+
+  let limitations = '';
+  if (Array.isArray(narrative.limitations) && narrative.limitations.length) {
+    limitations = '<h3 style="font-size:11pt;margin-top:14px">Ограничения проверки</h3><ul style="margin:0 0 8px 18px">';
+    for (const l of narrative.limitations) limitations += '<li>' + esc(l) + '</li>';
+    limitations += '</ul>';
+  }
+
+  return { summary, focus, plan, limitations };
+}
+
 /** Собрать HTML отчёта из шаблона. */
-function buildHtml(result, charts) {
+function buildHtml(result, charts, opts = {}) {
   const template = fs.readFileSync(path.join(TEMPLATES_DIR, 'report.html'), 'utf8');
   const styles = fs.readFileSync(path.join(TEMPLATES_DIR, 'styles.css'), 'utf8');
 
   const issues = sortIssues(result.issues || []);
   const top = issues.slice(0, 10);
+  const n = narrativeBlocks(opts.narrative);
 
   const score = result.integralScore;
   const legend = score >= 85
@@ -247,11 +283,15 @@ function buildHtml(result, charts) {
     .replace('__SECTION_ROWS__', sectionRows(result))
     .replace('__ISSUES_CHART__', charts.issues)
     .replace('__RADAR_CHART__', charts.radar)
+    .replace('__NARRATIVE_SUMMARY__', n.summary)
+    .replace('__NARRATIVE_FOCUS__', n.focus)
+    .replace('__NARRATIVE_PLAN__', n.plan)
+    .replace('__NARRATIVE_LIMITATIONS__', n.limitations)
     .replace('__TOP_ISSUES__', top.length
-      ? top.map((i, n) => issueCard(i, n + 1)).join('\n')
+      ? top.map((i, n2) => issueCard(i, n2 + 1)).join('\n')
       : '<p>Критичных проблем не обнаружено.</p>')
     .replace('__ALL_ISSUES__', issues.length
-      ? issues.map((i, n) => issueCard(i, n + 1)).join('\n')
+      ? issues.map((i, n2) => issueCard(i, n2 + 1)).join('\n')
       : '<p>Проблем не обнаружено.</p>');
 }
 
@@ -259,15 +299,17 @@ function buildHtml(result, charts) {
  * Сгенерировать PDF-отчёт.
  * @param {object} result — результат runFullAudit
  * @param {string} outPath — куда сохранить .pdf
+ * @param {object} [opts]
+ * @param {object} [opts.narrative] — клиентский текст (AI или детерминированный)
  * @returns {Promise<{path: string, bytes: number, durationMs: number}>}
  */
-async function generatePdfReport(result, outPath) {
+async function generatePdfReport(result, outPath, opts = {}) {
   const started = Date.now();
   const charts = {
     issues: await issuesChartPng(result),
     radar: await radarChartPng(result),
   };
-  const html = buildHtml(result, charts);
+  const html = buildHtml(result, charts, opts);
 
   const browser = await launchBrowser(true);
   try {

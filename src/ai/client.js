@@ -54,7 +54,7 @@ function okResult(res, model) {
  * Один вызов chat.completions (+1 повтор на 5xx).
  * @returns {Promise<{ok:true, text, model, tokensIn, tokensOut}|{ok:false, error:'AI_TIMEOUT'|'AI_ERROR'}>}
  */
-async function complete(client, { model, messages, maxTokens, temperature }) {
+async function complete(client, { model, messages, maxTokens, temperature, extraBody }) {
   if (!client) return { ok: false, error: 'AI_ERROR' };
   const call = () =>
     client.chat.completions.create({
@@ -62,6 +62,10 @@ async function complete(client, { model, messages, maxTokens, temperature }) {
       messages,
       max_tokens: maxTokens,
       temperature,
+      // GLM-4.5 по умолчанию включает режим размышления: он тратит токены
+      // и медленный. Для структурированных задач (JSON-отчёт) режим выключаем.
+      // openai-node не знает про extra_body — неизвестные поля идут в тело.
+      ...(extraBody || {}),
     });
 
   try {

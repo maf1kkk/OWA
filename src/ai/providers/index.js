@@ -68,6 +68,7 @@ function createProvider(env = process.env) {
     timeoutMs: Number(env.AI_TIMEOUT_MS || 30000),
     maxTokens: Number(env.AI_MAX_TOKENS || 2000),
     temperature: Number(env.AI_TEMPERATURE !== undefined ? env.AI_TEMPERATURE : 0.3),
+    thinking: env.AI_THINKING !== undefined ? env.AI_THINKING : '0',
   });
 }
 

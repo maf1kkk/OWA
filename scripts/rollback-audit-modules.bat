@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================
-REM  OWA - откат модулей 0-5 + веб-UI (аудит, PDF, SSRF, crawl, compare) без Git
+REM  OWA - откат модулей 0-5 + веб-UI + AI-слой (RAG) без Git
 REM
 REM  Восстанавливает изменённые файлы из .rollback-backup\original
 REM  и удаляет добавленные модули. Работает без доступа к Git.
@@ -28,6 +28,11 @@ for %%F in (
   package-lock.json
   package.json
   scripts\check-env.js
+  src\ai\client.js
+  src\ai\providers\index.js
+  src\ai\providers\openai-compatible.js
+  test\ai.test.js
+  test\code-session.test.js
   web\app.js
   web\routes\api.js
 ) do (
@@ -38,6 +43,8 @@ for %%F in (
 
 echo [2/2] Удаляю добавленные модули...
 for %%D in (
+  clients
+  src\ai\knowledge
   src\audit
   src\crawl
   src\compare
@@ -51,11 +58,12 @@ for %%D in (
   )
 )
 
-if exist "web\routes\audit.js" (
-  del /Q "web\routes\audit.js" && echo   - web\routes\audit.js
-)
-
 for %%F in (
+  src\ai\client-profile.js
+  src\ai\rag.js
+  src\ai\report-generator.js
+  web\routes\audit.js
+  test\ai-report.test.js
   test\audit.test.js
   test\crawl.test.js
   test\compare.test.js

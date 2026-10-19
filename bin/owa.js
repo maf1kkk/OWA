@@ -57,6 +57,8 @@ function parseArgs(argv) {
       case '--delay': args.delay = parseInt(argv[++i], 10); break;
       case '--target': args.target = argv[++i]; break;
       case '--with': args.with = argv[++i]; break;
+      case '--ai': args.ai = true; break;
+      case '--client': args.client = argv[++i]; break;
       case '--ignore-robots': args.ignoreRobots = true; break;
       case '--no-audit': args.noAudit = true; break;
       case '--selector': {
@@ -105,6 +107,8 @@ function usage() {
   --url <URL>          целевой URL (команда report)
   --target <URL>       сайт клиента (команда compare)
   --with <url1>,<url2> конкуренты через запятую (команда compare)
+  --ai                 клиентский текст отчёта через LLM (GLM), с проверкой фактов
+  --client <slug>      профиль клиента из clients/<slug>.json (тон, фокус, конкуренты)
   --full               полный аудит (команда audit)
   --max-pages <N>      сколько страниц обойти (crawl/sitemap, по умолч. 10)
   --max-depth <N>      глубина обхода (по умолч. 2)
@@ -123,6 +127,45 @@ function usage() {
 
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0];
+
+/**
+ * Клиентский текст отчёта: LLM (GLM) с проверкой фактов, при отказе —
+ * детерминированный шаблон. Без --ai работает только шаблон.
+ */
+async function buildNarrative(result, args, comparison) {
+  const { buildFacts, generateNarrative } = require('../src/ai/report-generator');
+  const { loadProfile } = require('../src/ai/client-profile');
+
+  const facts = buildFacts(result, comparison ? { comparison } : {});
+  let profile = null;
+  if (args.client) {
+    try {
+      profile = loadProfile(args.client);
+      if (!profile) console.error(`Профиль клиента не найден: ${args.client}`);
+    } catch (err) {
+      console.error(`Профиль клиента: ${err.message}`);
+    }
+  }
+
+  let ai = null;
+  if (args.ai) {
+    const { getAi } = require('../src/ai');
+    ai = getAi();
+    if (!ai.configured) {
+      console.error('AI не настроен (AI_API_KEY в .env) — будет использован шаблонный текст');
+      ai = null;
+    }
+  }
+
+  const res = await generateNarrative({
+    facts,
+    ai,
+    profile,
+    comparison,
+    logger: (m) => console.error('[ai] ' + m),
+  });
+  return res;
+}
 
 // ------------------------------------------------------------ compare
 if (command === 'compare') {
@@ -159,10 +202,15 @@ if (command === 'compare') {
       if (args.pdf) {
         const { generateComparePdf } = require('../src/report/compare-pdf');
         const out = path.resolve(args.pdf);
-        await generateComparePdf(result, out);
+        let narrative = null;
+        if (args.ai) {
+          const n = await buildNarrative(result, args, result);
+          narrative = n.narrative;
+          console.error(`Текст сравнения: ${n.source}${n.validation && !n.validation.ok ? ' (проверка фактов: ' + n.validation.errors.join('; ') + ')' : ''}`);
+        }
+        await generateComparePdf(result, out, { narrative });
         if (!args.json) console.error(`PDF-отчёт сохранён: ${out}`);
       }
-
       if (args.json) {
         console.log(JSON.stringify(result, null, 2));
       } else {
@@ -382,9 +430,13 @@ if (command === 'audit' || command === 'report') {
         timeout: args.timeout ?? 60000,
         waitAfterLoad: args.wait ?? 2500,
       });
+      const narrative = await buildNarrative(result, args, null);
       const out = path.resolve(args.pdf || 'owa-report.pdf');
-      await generatePdfReport(result, out);
+      await generatePdfReport(result, out, { narrative: narrative.narrative });
       console.error(`PDF-отчёт сохранён: ${out}`);
+      if (narrative.source) {
+        console.error(`Текст отчёта: ${narrative.source}${narrative.validation && !narrative.validation.ok ? ' (проверка фактов: ' + narrative.validation.errors.join('; ') + ')' : ''}`);
+      }
       process.exit(0);
     } catch (err) {
       if (args.json) {

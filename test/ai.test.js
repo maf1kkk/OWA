@@ -11,6 +11,15 @@ const { createRepos } = require('../src/db/repositories');
 const { getAi, resetAi, explainFinding, explainMissing, buildMessages, promptHash } = require('../src/ai');
 const { createApp } = require('../web/app');
 
+// Тесты не должны зависеть от локального .env: ключи и адреса провайдера
+// задаются в каждом тесте явно (иначе запрос уйдёт на реальный API).
+for (const key of [
+  'AI_API_KEY', 'AI_BASE_URL', 'AI_PROVIDER', 'AI_MODEL',
+  'AI_MAX_TOKENS', 'AI_TEMPERATURE', 'AI_TIMEOUT_MS', 'AI_THINKING',
+]) {
+  delete process.env[key];
+}
+
 // ------------------------------------------------------------- РјРѕРє GLM-СЃРµСЂРІРµСЂР°
 
 function completion(content) {
@@ -76,11 +85,23 @@ function startAiMock(mode = 'ok') {
 }
 
 function useAiEnv(base, extra = {}) {
-  process.env.GLM_API_KEY = extra.apiKey !== undefined ? extra.apiKey : 'test-key-not-real';
+  const apiKey = extra.apiKey !== undefined ? extra.apiKey : 'test-key-not-real';
+  process.env.GLM_API_KEY = apiKey;
   process.env.GLM_BASE_URL = base;
   process.env.GLM_MODEL = 'glm-4.5';
-  if (extra.timeoutMs) process.env.GLM_TIMEOUT_MS = String(extra.timeoutMs);
-  else delete process.env.GLM_TIMEOUT_MS;
+  // AI_* имеют приоритет над GLM_* — задаём их тоже, иначе провайдер
+  // возьмёт адрес из локального .env и уйдёт на реальный API.
+  process.env.AI_PROVIDER = 'openai';
+  process.env.AI_API_KEY = apiKey;
+  process.env.AI_BASE_URL = base;
+  process.env.AI_MODEL = 'glm-4.5';
+  if (extra.timeoutMs) {
+    process.env.GLM_TIMEOUT_MS = String(extra.timeoutMs);
+    process.env.AI_TIMEOUT_MS = String(extra.timeoutMs);
+  } else {
+    delete process.env.GLM_TIMEOUT_MS;
+    delete process.env.AI_TIMEOUT_MS;
+  }
   resetAi();
 }
 

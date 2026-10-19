@@ -1,0 +1,22 @@
+{
+  "name": "ООО «Пример Клиника»",
+  "industry": "медицина, стоматология",
+  "siteUrl": "https://example-clinic.ru",
+  "language": "ru",
+  "tone": "business",
+  "focus": ["seo", "conversion", "performance"],
+  "competitors": [
+    "https://competitor-a.ru",
+    "https://competitor-b.ru"
+  ],
+  "contact": {
+    "name": "Иван Петров",
+    "email": "ivan@example-clinic.ru",
+    "site": "https://example-audit.ru"
+  },
+  "branding": {
+    "color": "#1a7f37",
+    "note": "Аудит выполнен для сети клиник; отчёт используется как основание для плана работ на следующий квартал."
+  },
+  "notes": "Клиент — нетехнический: важно объяснять влияние на записи пациентов и стоимость привлечения, а не детали реализации. Приоритет — мобильная версия: 70% трафика со смартфонов."
+}
