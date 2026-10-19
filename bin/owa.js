@@ -1,25 +1,35 @@
 #!/usr/bin/env node
 /**
- * OWA — One-Click Web Analyzer
- * Автоматический сбор метрик производительности веб-приложений по URL.
+ * OWA — One-Click Web Analyzer / комплексный аудит сайтов
  *
  * Использование:
- *   node bin/owa.js <URL> [опции]
+ *   node bin/owa.js audit --full <URL>     полный аудит (5 секций) -> JSON
+ *   node bin/owa.js report --pdf out.pdf --url <URL>   клиентский PDF
+ *   node bin/owa.js crawl <URL>            обход сайта (краулер) -> агрегаты
+ *   node bin/owa.js sitemap <URL>/sitemap.xml   разбор sitemap (+обход)
+ *   node bin/owa.js <URL> [опции]           performance-анализ (как раньше)
  *
- * Опции:
+ * Опции performance-режима:
  *   --json                 вывести только машиночитаемый JSON (для ИИ-агентов)
- *   --compact              сверхкомпактный JSON с готовой интерпретацией (минимум токенов)
+ *   --compact              сверхкомпактный JSON с готовой интерпретацией
  *   --out <файл>           сохранить полный JSON-отчёт в файл
- *   --md <файл>            сохранить Markdown-отчёт (для лабораторной)
- *   --selector <sel>       селектор виджета для пользовательской метрики (можно несколько раз)
+ *   --md <файл>            сохранить Markdown-отчёт
+ *   --selector <sel>       селектор виджета (можно несколько раз)
  *   --wait <мс>            ожидание после load (по умолч. 5000)
  *   --timeout <мс>         таймаут навигации (по умолч. 60000)
  *   --headed               запуск с видимым окном браузера
  *   --console              перехватывать console-сообщения страницы
-  *   --code                 статический анализ кода (CSS/HTML/JS) в отчёт
-  *   --baseline <файл.json> сравнить с сохранённым baseline (exit 1 при регрессиях)
-  *   --threshold <N>        порог регрессии в % для --baseline (по умолч. 5)
-  */
+ *   --code                 статический анализ кода (CSS/HTML/JS) в отчёт
+ *   --baseline <файл.json> сравнить с сохранённым baseline (exit 1 при регрессиях)
+ *   --threshold <N>        порог регрессии в % для --baseline (по умолч. 5)
+ *
+ * Опции crawl/sitemap:
+ *   --max-pages <N>        сколько страниц обойти (по умолч. 10)
+ *   --max-depth <N>        глубина обхода (по умолч. 2)
+ *   --delay <мс>           пауза между страницами (по умолч. 300)
+ *   --ignore-robots        не соблюдать robots.txt
+ *   --no-audit             только собрать список URL, без аудита страниц
+ */
 const fs = require('fs');
 const path = require('path');
 const { analyze } = require('../src/engine');
@@ -27,6 +37,8 @@ const { analyzeCode } = require('../src/static-analyzer');
 const { printReport, toMarkdown } = require('../src/report');
 const { buildCompact } = require('../src/interpret');
 const { diffWithBaseline, printDiff } = require('../src/diff');
+const { runFullAudit } = require('../src/audit');
+const { printAuditReport } = require('../src/audit/report-text');
 
 function parseArgs(argv) {
   const args = { selectors: [], _: [] };
@@ -37,6 +49,14 @@ function parseArgs(argv) {
       case '--compact': args.compact = true; args.json = true; break;
       case '--out': args.out = argv[++i]; break;
       case '--md': args.md = argv[++i]; break;
+      case '--pdf': args.pdf = argv[++i]; break;
+      case '--url': args.url = argv[++i]; break;
+      case '--full': args.full = true; break;
+      case '--max-pages': args.maxPages = parseInt(argv[++i], 10); break;
+      case '--max-depth': args.maxDepth = parseInt(argv[++i], 10); break;
+      case '--delay': args.delay = parseInt(argv[++i], 10); break;
+      case '--ignore-robots': args.ignoreRobots = true; break;
+      case '--no-audit': args.noAudit = true; break;
       case '--selector': {
         const sel = argv[++i];
         if (sel === undefined || sel.startsWith('--')) {
@@ -64,16 +84,28 @@ function parseArgs(argv) {
   return args;
 }
 
-const args = parseArgs(process.argv.slice(2));
+function usage() {
+  console.log(`OWA — One-Click Web Analyzer / комплексный аудит сайтов
+Использование:
+  node bin/owa.js audit --full <URL> [--out audit.json] [--json]
+  node bin/owa.js report --pdf <файл.pdf> --url <URL>
+  node bin/owa.js crawl <URL> [--max-pages N] [--max-depth N] [--delay мс]
+  node bin/owa.js sitemap <URL>/sitemap.xml [--max-pages N]
+  node bin/owa.js <URL> [опции]
 
-if (args.help || args._.length === 0) {
-  console.log(`OWA — One-Click Web Analyzer
-Использование: node bin/owa.js <URL> [опции]
 Опции:
   --json               только JSON-вывод (для ИИ-агентов)
-  --compact            компактный JSON с готовой интерпретацией (минимум токенов)
+  --compact            компактный JSON с готовой интерпретацией
   --out <файл>         сохранить полный JSON
   --md <файл>          сохранить Markdown-отчёт
+  --pdf <файл>         сохранить PDF-отчёт (команда report)
+  --url <URL>          целевой URL (команда report)
+  --full               полный аудит (команда audit)
+  --max-pages <N>      сколько страниц обойти (crawl/sitemap, по умолч. 10)
+  --max-depth <N>      глубина обхода (по умолч. 2)
+  --delay <мс>         пауза между страницами (по умолч. 300)
+  --ignore-robots      не соблюдать robots.txt
+  --no-audit           только собрать URL, без аудита страниц
   --selector <sel>     селектор виджета (повторяемо)
   --wait <мс>          ожидание после load (по умолч. 5000)
   --timeout <мс>       таймаут навигации (по умолч. 60000)
@@ -81,7 +113,200 @@ if (args.help || args._.length === 0) {
   --console            перехват console-логов страницы
   --code               статический анализ кода (CSS/HTML/JS) в отчёт
   --baseline <файл>    сравнить с сохранённым baseline (exit 1 при регрессиях)
-  --threshold <N>      порог регрессии в % для --baseline (по умолч. 5)`);
+  --threshold <N>      порог регрессии в % (по умолч. 5)`);
+}
+
+const args = parseArgs(process.argv.slice(2));
+const command = args._[0];
+
+// ------------------------------------------------------- crawl / sitemap
+if (command === 'crawl' || command === 'sitemap') {
+  const target = args._[1];
+  if (!target || !/^https?:\/\//i.test(target)) {
+    console.error(command === 'sitemap'
+      ? 'Использование: owa sitemap <URL>/sitemap.xml'
+      : 'Использование: owa crawl <URL>');
+    process.exit(2);
+  }
+
+  (async () => {
+    try {
+      const { crawlSite } = require('../src/crawl/crawler');
+      const { collectSitemapUrls } = require('../src/crawl/sitemap');
+
+      let seedUrls = [];
+      let startUrl = target;
+      let sitemapInfo = null;
+
+      if (command === 'sitemap') {
+        sitemapInfo = await collectSitemapUrls(target, {
+          maxSitemaps: 20,
+          maxUrls: Number.isFinite(args.maxPages) ? args.maxPages * 5 : 200,
+        });
+        if (!sitemapInfo.urls.length) {
+          console.error('В sitemap не найдено URL: ' + target);
+          process.exit(2);
+        }
+        seedUrls = sitemapInfo.urls;
+        // Стартовая страница — origin сайта, чтобы обход шёл по домену.
+        startUrl = new URL(seedUrls[0]).origin + '/';
+      }
+
+      if (args.noAudit) {
+        const result = {
+          schemaVersion: 2,
+          tool: 'owa',
+          type: command,
+          startUrl,
+          urls: seedUrls,
+          sitemap: sitemapInfo ? { sitemaps: sitemapInfo.sitemaps, truncated: sitemapInfo.truncated } : null,
+        };
+        if (args.out) {
+          fs.writeFileSync(path.resolve(args.out), JSON.stringify(result, null, 2), 'utf8');
+        }
+        console.log(JSON.stringify(result, null, 2));
+        process.exit(0);
+      }
+
+      const result = await crawlSite(startUrl, {
+        maxPages: Number.isFinite(args.maxPages) ? args.maxPages : 10,
+        maxDepth: Number.isFinite(args.maxDepth) ? args.maxDepth : 2,
+        delayMs: Number.isFinite(args.delay) ? args.delay : 300,
+        respectRobots: !args.ignoreRobots,
+        seedUrls,
+        timeout: args.timeout ?? 60000,
+        waitAfterLoad: Math.min(args.wait ?? 1500, 5000),
+        logger: args.json ? () => {} : (m) => console.error('[crawl] ' + m),
+      });
+      if (sitemapInfo) {
+        result.sitemap = { sitemaps: sitemapInfo.sitemaps, truncated: sitemapInfo.truncated, urlCount: sitemapInfo.urls.length };
+      }
+
+      if (args.out) {
+        fs.writeFileSync(path.resolve(args.out), JSON.stringify(result, null, 2), 'utf8');
+        if (!args.json) console.error(`JSON-отчёт сохранён: ${args.out}`);
+      }
+      if (args.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        printCrawlReport(result);
+      }
+      process.exit(0);
+    } catch (err) {
+      if (args.json) {
+        console.log(JSON.stringify({ error: String(err && err.message || err) }, null, 2));
+      } else {
+        console.error(`Ошибка: ${err && err.message || err}`);
+      }
+      process.exit(2);
+    }
+  })();
+  return;
+}
+
+/** Текстовый вывод отчёта по обходу сайта. */
+function printCrawlReport(result) {
+  const a = result.aggregate || {};
+  const line = '-'.repeat(70);
+  console.log(`\n${line}`);
+  console.log('  OWA — Обход сайта');
+  console.log(`  Старт: ${result.startUrl}`);
+  console.log(`  Страниц обработано: ${a.pageCount || 0} (ошибок: ${a.failedCount || 0})`);
+  console.log(line);
+
+  if (a.avgScore !== null && a.avgScore !== undefined) {
+    console.log(`\n■ Средняя оценка по сайту: ${a.avgScore}/100`);
+  }
+  if (a.avgMetrics) {
+    const m = a.avgMetrics;
+    const line2 = (label, value, unit) => {
+      if (value === null || value === undefined) return;
+      console.log('  ' + label.padEnd(16) + value + unit);
+    };
+    console.log('\n■ Средние метрики');
+    line2('LCP', m.lcpMs, ' мс');
+    line2('CLS', m.cls, '');
+    line2('FCP', m.fcpMs, ' мс');
+    line2('TTFB', m.ttfbMs, ' мс');
+    line2('TBT', m.tbtMs, ' мс');
+    line2('Ресурсов', m.resources, ' шт');
+  }
+
+  if (a.topIssues && a.topIssues.length) {
+    console.log('\n■ Топ проблем по частоте (сколько страниц затронуто)');
+    for (const issue of a.topIssues) {
+      console.log(`  [${issue.severity}] ${issue.rule}: ${issue.count} стр. — ${issue.pages.slice(0, 3).join(', ')}`);
+    }
+  }
+
+  if (a.worstPages && a.worstPages.length) {
+    console.log('\n■ Страницы с худшими показателями');
+    for (const p of a.worstPages) {
+      console.log(`  ${String(p.score).padStart(3)}/100  ${p.url}`);
+    }
+  }
+  console.log(`\n${line}\n`);
+}
+
+// ------------------------------------------------------------ audit / report
+if (command === 'audit' || command === 'report') {
+  const url = command === 'report' ? args.url : args._[1];
+  if (!url || !/^https?:\/\//i.test(url)) {
+    console.error(command === 'report'
+      ? 'Команда report требует --url <URL>'
+      : 'Использование: owa audit --full <URL>');
+    process.exit(2);
+  }
+  if (command === 'audit' && !args.full) {
+    console.error('Команда audit требует флаг --full');
+    process.exit(2);
+  }
+
+  (async () => {
+    try {
+      if (command === 'audit') {
+        const result = await runFullAudit(url, {
+          timeout: args.timeout ?? 60000,
+          waitAfterLoad: args.wait ?? 2500,
+          logger: args.json ? () => {} : (m) => console.error(`[audit] ${m}`),
+        });
+        if (args.out) {
+          fs.writeFileSync(path.resolve(args.out), JSON.stringify(result, null, 2), 'utf8');
+          if (!args.json) console.error(`JSON-отчёт сохранён: ${args.out}`);
+        }
+        if (args.json) {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          printAuditReport(result);
+        }
+        process.exit(0);
+      }
+
+      // report --pdf
+      const { generatePdfReport } = require('../src/report/pdf');
+      const result = await runFullAudit(url, {
+        timeout: args.timeout ?? 60000,
+        waitAfterLoad: args.wait ?? 2500,
+      });
+      const out = path.resolve(args.pdf || 'owa-report.pdf');
+      await generatePdfReport(result, out);
+      console.error(`PDF-отчёт сохранён: ${out}`);
+      process.exit(0);
+    } catch (err) {
+      if (args.json) {
+        console.log(JSON.stringify({ error: String(err && err.message || err) }, null, 2));
+      } else {
+        console.error(`Ошибка: ${err && err.message || err}`);
+      }
+      process.exit(2);
+    }
+  })();
+  return;
+}
+
+// ------------------------------------------------- performance-режим (как раньше)
+if (args.help || args._.length === 0) {
+  usage();
   process.exit(0);
 }
 
@@ -101,8 +326,6 @@ if (!/^https?:\/\//i.test(url)) {
       consoleLogs: !!args.consoleLogs,
     });
 
-    // Статический анализ кода (по флагу --code): не ломает основной отчёт,
-    // при сбое только предупреждает в stderr.
     let codeResult = null;
     if (args.code) {
       try {
@@ -124,8 +347,6 @@ if (!/^https?:\/\//i.test(url)) {
       if (!args.json) console.error(`Markdown-отчёт сохранён: ${args.md}`);
     }
 
-    // Diff-режим: сравнение с baseline (файл JSON, сохранённый через --out).
-    // При регрессиях (метрика стала хуже на >= threshold%) exit-код 1.
     let hasRegression = false;
     let diff = null;
     let thresholdPct = Number.isFinite(args.threshold) ? args.threshold : 5;
@@ -141,8 +362,6 @@ if (!/^https?:\/\//i.test(url)) {
       hasRegression = diff.regressions > 0;
     }
 
-    // В JSON-режиме — ровно один объект: отчёт, к которому diff прикреплён
-    // полем (два последовательных JSON в stdout — невалидный поток для парсера).
     if (args.json) {
       const report = args.compact ? buildCompact(data) : data;
       if (diff) report.diff = diff;
@@ -154,7 +373,6 @@ if (!/^https?:\/\//i.test(url)) {
       if (diff) printDiff(diff, { thresholdPct });
     }
 
-    // Exit-код для ИИ-агентов: 0 = ок, 1 = есть серьёзные проблемы или регрессии
     const m = data.metrics;
     const bad =
       (m.legacyTiming && m.legacyTiming.loadTime > 5000) ||

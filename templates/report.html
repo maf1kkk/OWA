@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>OWA — Отчёт аудита</title>
+<style>__STYLES__</style>
+</head>
+<body>
+  <div class="footer">
+    <span>OWA — комплексный аудит сайта</span>
+    <span>__URL_SHORT__ · __DATE_SHORT__</span>
+  </div>
+
+  <div class="cover">
+    <div class="brand">OWA · One-Click Web Analyzer</div>
+    <div class="url">__URL__</div>
+    <div class="date">Дата аудита: __DATE_LONG__</div>
+
+    <div class="score-hero">
+      <div class="big __SCORE_CLASS__">__INTEGRAL_SCORE__</div>
+      <div class="legend">
+        <b>Интегральная оценка</b> — средневзвешенная по пяти секциям аудита:
+        производительность, SEO, безопасность, доступность и контент.
+        __SCORE_LEGEND__
+      </div>
+    </div>
+
+    <div class="section-scores">
+      __SECTION_SCORES__
+    </div>
+
+    <div class="chart" style="margin-top:20px">
+      <img src="__RADAR_CHART__" alt="Профиль сайта по секциям аудита">
+      <div class="caption">Профиль сайта: оценка по каждой секции аудита (0–100)</div>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>Core Web Vitals</h2>
+  <table class="vitals-table">
+    <tr><th style="width:16px"></th><th>Метрика</th><th style="text-align:right">Значение</th><th>Порог Good</th><th>Порог Poor</th><th>Оценка</th></tr>
+    __VITALS_ROWS__
+  </table>
+
+  <h2>Оценки по секциям</h2>
+  <table>
+    <tr><th>Секция</th><th style="text-align:right">Оценка</th><th>Статус</th><th style="text-align:right">Проблем</th><th style="text-align:right">Время, мс</th></tr>
+    __SECTION_ROWS__
+  </table>
+
+  <h2>Топ-10 проблем по приоритету</h2>
+  __TOP_ISSUES__
+
+  <h2>Распределение проблем по категориям</h2>
+  <div class="chart">
+    <img src="__ISSUES_CHART__" alt="Распределение проблем по секциям">
+    <div class="caption">Количество проблем по секциям аудита</div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>Подробный список проблем</h2>
+  __ALL_ISSUES__
+
+  <div class="disclaimer">
+    Отчёт сформирован автоматически инструментом OWA на основе фактических измерений
+    в headless Chromium (Performance API, axe-core, проверки HTTP-заголовков и мета-тегов).
+    Оценки отражают состояние сайта на момент аудита и носят рекомендательный характер.
+    <br>
+    Повторный аудит: <span>owa audit --full __URL__</span>
+  </div>
+</body>
+</html>

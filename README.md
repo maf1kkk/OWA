@@ -4,7 +4,7 @@
 > **Зачем:** демонстрация работы с Performance API, Playwright, MCP и AI-интеграцией.
 
 [![test](https://github.com/maf1kkk/OWA/actions/workflows/test.yml/badge.svg)](https://github.com/maf1kkk/OWA/actions/workflows/test.yml)
-![Node](https://img.shields.io/badge/node-%3E%3D22.16.0-brightgreen)
+![Node](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 Автоматизированный сборщик метрик производительности веб-приложений. Вставляешь ссылку — получаешь полный отчёт в консоль, JSON или Markdown.
@@ -49,7 +49,7 @@ _Плейсхолдер: здесь будет демонстрация (asciine
 
 ## Требования
 
-- **Node.js 22.16.0 или новее** — https://nodejs.org (старше не ставим сами, только проверяем)
+- **Node.js 24.0.0 или новее** — https://nodejs.org (старше не ставим сами, только проверяем). Node 24 обязателен: ssrf-guard и chartjs-node-canvas требуют его
 - Доступ в интернет при первой установке (npm + Chromium Playwright)
 - Windows / Linux / macOS
 
@@ -456,3 +456,96 @@ node --test test/mcp.test.js          # MCP-сервер (есть сетевы�
 76+ тестов: граничные случаи, стабильность схемы JSON, обработка недоступных сайтов / невалидных URL / несуществующих селекторов, живучесть MCP-сервера, миграции и репозитории SQLite, HTTP-роуты (история, валидация, формат ошибок), правила статанализа CSS/HTML/JS, полный цикл сессий `POST /api/code-analysis`, AI-слой (кэш, retry на 5xx, таймаут, коды ошибок) на мок-сервере, и diff-режим `--baseline`.
 
 > Сетевые тесты CLI/MCP требуют установленного Chromium (`npx playwright install chromium`) — `start.bat` делает это сам.
+
+---
+
+## Комплексный аудит (модули 0–3)
+
+Расширение OWA: полный аудит сайта в пяти секциях + клиентский PDF-отчёт.
+
+### Команды
+
+```bash
+# Полный аудит (Performance, SEO, Security, Accessibility, Content) -> JSON
+node bin/owa.js audit --full https://example.com
+node bin/owa.js audit --full https://example.com --out audit.json --json
+
+# Клиентский PDF-отчёт (титул, Core Web Vitals, топ-10 проблем, графики)
+node bin/owa.js report --pdf report.pdf --url https://example.com
+```
+
+### Архитектура
+
+```
+Заказ/API -> валидация URL + SSRF -> AuditOrchestrator (p-queue, p-retry)
+           -> 5 секций на общем Playwright-контексте
+           -> нормализация -> integralScore -> PDF/JSON
+```
+
+| Файл | Назначение |
+|---|---|
+| `src/core/orchestrator.js` | Ядро: параллельный запуск секций, изоляция ошибок, интегральная оценка |
+| `src/audit/session.js` | Общий Playwright-контекст аудита (одно открытие страницы на все секции) |
+| `src/audit/sections.js` | Секции: performance, seo, security, accessibility, content |
+| `src/audit/index.js` | `runFullAudit(url)` — запуск всех секций |
+| `src/report/pdf.js` | Генерация PDF (Playwright `page.pdf()` + PNG-графики через chartjs-node-canvas) |
+| `templates/report.html`, `templates/styles.css` | Шаблон клиентского отчёта |
+| `src/security/safe-fetch.js` | Единый `safeFetch`: SSRF-защита, пининг IP, перепроверка редиректов |
+
+### Секции аудита
+
+- **Performance** — LCP, CLS, FCP, TTFB, TBT, Long Tasks, ресурсы, JS-ошибки.
+- **SEO** — title, description, canonical, Open Graph, H-структура, alt-тексты, битые внутренние ссылки, robots.txt.
+- **Security** — CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, mixed content, HTTPS.
+- **Accessibility** — axe-core: violations с селекторами и severity (critical/warning/info).
+- **Content** — пустые ссылки, дубли заголовков, длина title, структурированные данные, объём текста.
+
+Падение одной секции не роняет аудит: секция получает `status: "failed"`, остальные отрабатывают.
+
+### SSRF-защита (включена по умолчанию)
+
+Все исходящие запросы идут через `src/security/safe-fetch.js`: DNS резолвится один раз,
+адрес проверяется и **пинится в сокет** (закрывает DNS-rebinding), каждый редирект
+перепроверяется. Приватные диапазоны (включая `169.254.169.254`), `localhost`, `*.local`
+и `*.internal` блокируются; заблокированные попытки логируются с URL и причиной.
+
+Локальная разработка (аудит сборки на `http://localhost:3000`):
+
+```bash
+OWA_ALLOW_PRIVATE_TARGETS=1 node bin/owa.js audit --full http://localhost:3000
+```
+
+### Откат модулей 0–3 без Git
+
+Изменения лежат в рабочем дереве (коммита нет). Чтобы откатить их локально:
+
+```bash
+scripts\rollback-audit-modules.bat    # Windows
+sh scripts/rollback-audit-modules.sh  # Linux/macOS
+```
+
+Скрипт восстанавливает изменённые файлы из `.rollback-backup/original` и удаляет
+добавленные модули (`src/audit`, `src/core`, `src/report`, `src/security`, `templates`,
+новые тесты). Бэкап лежит вне Git (в `.gitignore`).
+
+### Обход сайта и sitemap (модуль 4)
+
+```bash
+# Обход сайта: до 10 страниц, глубина 2, с учётом robots.txt
+node bin/owa.js crawl https://example.com --max-pages 10 --max-depth 2
+
+# Разбор sitemap.xml (включая вложенные sitemap-индексы) + обход страниц
+node bin/owa.js sitemap https://example.com/sitemap.xml --max-pages 10
+
+# Только собрать список URL, без аудита
+node bin/owa.js crawl https://example.com --no-audit --json
+```
+
+Опции: `--max-pages`, `--max-depth`, `--delay <мс>` (пауза между страницами),
+`--ignore-robots`, `--no-audit`, `--out`, `--json`.
+
+Каждая страница проходит облегчённый аудит (Performance, SEO, Accessibility) —
+Security и Content пропущены ради экономии ресурсов. Итоговый JSON содержит
+**агрегаты по сайту**: средняя оценка, средние метрики (LCP/CLS/FCP/TTFB/TBT),
+топ проблем по частоте (сколько страниц затронуто) и страницы с худшими
+показателями. Обход не выходит за пределы домена и уважает `robots.txt`.

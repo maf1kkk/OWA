@@ -19,6 +19,7 @@ const { analyze } = require('../../src/engine');
 const { buildCompact } = require('../../src/interpret');
 const { diffWithBaseline } = require('../../src/diff');
 const { checkTargetUrl } = require('../../src/security');
+const { assertSafeUrl } = require('../../src/security/safe-fetch');
 const {
   HttpError,
   validateBody,
@@ -98,6 +99,14 @@ function createApiRouter({ repos }) {
     const url = body.url.trim();
 
     isValidTarget(url);
+
+    // SSRF-защита: приватные адреса запрещены по умолчанию
+    // (OWA_ALLOW_PRIVATE_TARGETS=1 — исключение для локальной разработки).
+    try {
+      await assertSafeUrl(url);
+    } catch (err) {
+      throw new HttpError(400, 'SSRF_BLOCKED', String(err && err.message || err));
+    }
 
     if (running.has(url)) {
       throw new HttpError(409, 'ALREADY_RUNNING', 'Этот URL уже анализируется');

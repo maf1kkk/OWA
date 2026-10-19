@@ -1,0 +1,90 @@
+/* Стили клиентского PDF-отчёта OWA.
+   Шрифты — только стандартные (Helvetica/Arial), чтобы не съезжали
+   в Adobe Reader и в браузере: кастомные шрифты требуют встраивания. */
+
+@page { size: A4; margin: 16mm 14mm 18mm; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Helvetica, Arial, "Liberation Sans", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.45;
+  color: #1b1f24;
+  background: #fff;
+}
+
+h1, h2, h3 { margin: 0 0 8px; font-weight: 700; }
+h1 { font-size: 22pt; }
+h2 { font-size: 13pt; margin-top: 18px; padding-bottom: 5px; border-bottom: 2px solid #e6e8eb; }
+h3 { font-size: 11pt; margin-top: 12px; }
+
+p { margin: 0 0 8px; }
+
+.cover { text-align: center; padding-top: 40px; }
+.cover .brand { font-size: 11pt; letter-spacing: .18em; text-transform: uppercase; color: #6b7280; }
+.cover .url { font-size: 15pt; font-weight: 700; margin: 14px 0 4px; word-break: break-all; }
+.cover .date { color: #6b7280; font-size: 10pt; }
+
+.score-hero {
+  display: flex; align-items: center; justify-content: center; gap: 26px;
+  margin: 22px 0 10px;
+}
+.score-hero .big {
+  font-size: 52pt; font-weight: 700; line-height: 1;
+  width: 120px; height: 120px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+}
+.score-hero .big.good { background: #1a7f37; }
+.score-hero .big.warn { background: #b7791f; }
+.score-hero .big.bad { background: #c0392b; }
+.score-hero .legend { font-size: 10pt; color: #4b5563; max-width: 300px; }
+
+.section-scores { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 14px; }
+.section-score {
+  border: 1px solid #d8dce1; border-radius: 6px; padding: 8px 12px; min-width: 108px; text-align: center;
+}
+.section-score .name { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; }
+.section-score .val { font-size: 17pt; font-weight: 700; }
+.section-score .val.good { color: #1a7f37; }
+.section-score .val.warn { color: #b7791f; }
+.section-score .val.bad { color: #c0392b; }
+
+table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; }
+th, td { text-align: left; padding: 5px 7px; border-bottom: 1px solid #e6e8eb; }
+th { background: #f3f4f6; font-weight: 600; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em; color: #4b5563; }
+td.num { text-align: right; font-family: "Courier New", monospace; }
+
+.vitals-table td.indicator { width: 16px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.dot.good { background: #1a7f37; }
+.dot.warn { background: #b7791f; }
+.dot.bad { background: #c0392b; }
+.dot.none { background: #9ca3af; }
+
+.issue { border: 1px solid #e2e5e9; border-left: 4px solid #9ca3af; border-radius: 4px; padding: 8px 11px; margin-bottom: 8px; page-break-inside: avoid; }
+.issue.critical { border-left-color: #c0392b; }
+.issue.warning { border-left-color: #b7791f; }
+.issue.info { border-left-color: #3b82f6; }
+.issue .head { font-weight: 700; font-size: 10pt; margin-bottom: 3px; }
+.issue .sev { display: inline-block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; padding: 1px 6px; border-radius: 999px; color: #fff; margin-right: 6px; vertical-align: 1px; }
+.issue.critical .sev { background: #c0392b; }
+.issue.warning .sev { background: #b7791f; }
+.issue.info .sev { background: #3b82f6; }
+.issue .row { font-size: 9.5pt; margin-top: 3px; }
+.issue .row b { color: #374151; }
+.issue .loc { font-family: "Courier New", monospace; font-size: 8.5pt; color: #6b7280; word-break: break-all; }
+
+.chart { margin: 10px 0 14px; text-align: center; page-break-inside: avoid; }
+.chart img { max-width: 100%; }
+.chart .caption { font-size: 8.5pt; color: #6b7280; margin-top: 4px; }
+
+.footer {
+  position: fixed; bottom: -8mm; left: 0; right: 0;
+  border-top: 1px solid #e6e8eb; padding-top: 5px;
+  font-size: 8pt; color: #8b929b; display: flex; justify-content: space-between;
+}
+.disclaimer { font-size: 8.5pt; color: #6b7280; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e6e8eb; }
+.page-break { page-break-before: always; }

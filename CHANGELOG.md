@@ -143,3 +143,62 @@ Rate-limit, защита от DDoS, подготовка к публичному
 - MCP-сервер `mcp/server.js` (stdio) с инструментом `analyze_url`.
 - Веб-интерфейс `web/`.
 - 27 тестов на `node --test`.
+
+## [Unreleased] — комплексный аудит (модули 0–3)
+
+### Added
+- `src/core/orchestrator.js` — `AuditOrchestrator`: параллельный запуск секций через
+  `p-queue` (ограничение параллелизма), повторы через `p-retry`, изоляция ошибок
+  (секция -> `status: "failed"`, остальные продолжают), интегральная оценка
+  (средневзвешенная: performance 0.3, seo 0.25, security 0.2, accessibility 0.15,
+  content 0.1), логирование времени каждой секции.
+- `src/audit/session.js` — общий Playwright-контекст: все секции работают на одном
+  открытии страницы (браузер не перезапускается).
+- `src/audit/sections.js` — четыре новые секции: `seo`, `security`, `accessibility`
+  (axe-core 4.14), `content`. Каждая — независимая `AuditSection` с правилами
+  severity (critical/warning/info) и человекочитаемой рекомендацией.
+- `src/audit/index.js` — `runFullAudit(url)`: полный аудит в одной схеме
+  (`url`, `timestamp`, `scores`, `issues`, `raw`, `integralScore`).
+- `src/report/pdf.js` + `templates/report.html` + `templates/styles.css` — клиентский
+  PDF: титульный лист с интегральной оценкой и радаром, Core Web Vitals с порогами
+  Good/Needs Improvement/Poor, топ-10 проблем с блоками «Что не так» / «Как исправить»,
+  кольцевая диаграмма распределения по категориям, футер. Графики рендерятся заранее
+  в PNG (chartjs-node-canvas) и вставляются как data-URI — JS внутри `page.pdf()` не
+  используется. Шрифты стандартные (Helvetica/Arial) — не разъезжаются в Adobe Reader.
+- CLI: `owa audit --full <url>` (JSON/текст, `--out`) и `owa report --pdf <file> --url <url>`.
+- `src/security/safe-fetch.js` — единая точка исходящих запросов: `ssrf-guard`
+  (DNS резолвится один раз, адрес валидируется и пинится в сокет — TOCTOU/DNS-rebinding
+  закрыты), редиректы обрабатываются вручную и перепроверяются на каждом ходу.
+- Тесты: `test/orchestrator.test.js`, `test/audit.test.js`, `test/pdf.test.js`,
+  `test/ssrf.test.js` — **141 тест** (было 118).
+
+### Changed
+- SSRF-защита включена по умолчанию: приватные диапазоны, `localhost`, `*.local`,
+  `*.internal` блокируются в MCP, веб-API (`/api/analyze`) и аудите; заблокированные
+  попытки логируются с URL и причиной. Локальная разработка — `OWA_ALLOW_PRIVATE_TARGETS=1`.
+- `package.json` — добавлены `p-queue`, `p-retry`, `axe-core`, `chart.js`,
+  `chartjs-node-canvas`, `undici`, `ssrf-guard` (ESM-only, требует Node >= 24).
+
+### Прочее
+- Откат модулей 0–3 без Git: `scripts/rollback-audit-modules.bat` / `.sh`
+  (бэкап в `.rollback-backup/`, вне Git).
+
+## [Unreleased] — модуль 4: обход сайта и sitemap
+
+### Added
+- `src/crawl/crawler.js` — краулер: очередь внутренних ссылок, ограничение доменом
+  и глубины, лимит страниц, пауза между запросами (нагрузка на чужой сайт).
+  Каждая страница проходит облегчённый аудит (Performance, SEO, Accessibility) на
+  **одном** браузере на весь обход. Итог — агрегаты по сайту: средняя оценка,
+  средние метрики, топ проблем по частоте, худшие страницы.
+- `src/crawl/sitemap.js` — разбор `sitemap.xml` и вложенных `sitemapindex`
+  (fast-xml-parser), загрузка через safeFetch (SSRF-защита + пининг IP).
+- `src/crawl/robots.js` — соблюдение robots.txt (robots-parser).
+- CLI: `owa crawl <URL>` и `owa sitemap <URL>/sitemap.xml`
+  (`--max-pages`, `--max-depth`, `--delay`, `--ignore-robots`, `--no-audit`).
+- Тесты: `test/crawl.test.js` — **148 тестов** (было 141).
+
+### Changed
+- `src/audit/session.js` — сессия может использовать уже открытый браузер
+  (`options.browser`), чтобы краулер не перезапускал Chromium на каждой странице.
+- `package.json` — добавлены `robots-parser`, `fast-xml-parser`.

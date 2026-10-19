@@ -51,3 +51,6 @@ sources/
 check.txt
 check2.txt
 console_view.html
+
+# --- Локальный бэкап для отката без Git (scripts/rollback-audit-modules.*) ---
+.rollback-backup/

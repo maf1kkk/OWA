@@ -12,7 +12,7 @@
  *   3 — .env создан из .env.example, нужно заполнить и запустить снова
  *
  * Проверки:
- *   1. версия Node.js >= 22.16.0
+ *   1. версия Node.js >= 24.0.0
  *   2. node_modules (нет или package.json новее -> npm install)
  *   3. Chromium Playwright в пользовательском кэше
  *   4. наличие .env
@@ -24,7 +24,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const MIN_NODE = [22, 16, 0];
+const MIN_NODE = [24, 0, 0];
 const ROOT = path.join(__dirname, '..');
 const FIX = process.argv.includes('--fix');
 const TTY = process.stdout.isTTY;

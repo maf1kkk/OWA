@@ -26,6 +26,7 @@
  */
 const { analyze, clampWait } = require('../src/engine');
 const { checkTargetUrl } = require('../src/security');
+const { assertSafeUrl } = require('../src/security/safe-fetch');
 const { buildCompact } = require('../src/interpret');
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -124,6 +125,17 @@ async function handleRequest(line) {
         if (!verdict.ok) {
           return jsonRpcResult(id, {
             content: [{ type: 'text', text: JSON.stringify({ error: 'URL обязателен и должен начинаться с http:// или https://' }) }],
+            isError: true,
+          });
+        }
+
+        // SSRF-защита: приватные адреса запрещены по умолчанию
+        // (OWA_ALLOW_PRIVATE_TARGETS=1 — исключение для локальной разработки).
+        try {
+          await assertSafeUrl(a.url);
+        } catch (err) {
+          return jsonRpcResult(id, {
+            content: [{ type: 'text', text: JSON.stringify({ error: String(err && err.message || err), code: err && err.code }) }],
             isError: true,
           });
         }
