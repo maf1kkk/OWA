@@ -1,7 +1,7 @@
 {
   "name": "owa",
-  "version": "1.2.1",
-  "description": "OWA — One-Click Web Analyzer: сбор и анализ метрик производительности веб-приложений",
+  "version": "1.3.0",
+  "description": "OWA — комплексный аудит сайтов: производительность, SEO, безопасность, доступность, контент + PDF, crawl, compare, MCP",
   "main": "src/engine.js",
   "bin": {
     "owa": "bin/owa.js"
