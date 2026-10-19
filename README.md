@@ -22,6 +22,23 @@ node bin/owa.js compare --target https://site.com --with https://rival.com
 
 ---
 
+## Демо
+
+**Веб-интерфейс — вкладка «Аудит»** (оценка по разделам, проблемы с рекомендациями, выгрузка PDF):
+
+![Веб-интерфейс OWA: комплексный аудит](docs/ui-audit.png)
+
+**Пример клиентского PDF-отчёта** (титул с оценкой и радаром, Core Web Vitals,
+топ-10 проблем, графики, план работ):
+
+[Скачать sample-audit-report.pdf](docs/sample-audit-report.pdf) · 202 КБ
+
+**Сравнительный отчёт** (клиент против конкурентов):
+
+```bash
+node bin/owa.js compare --target https://site.com --with https://rival-a.com,https://rival-b.com --pdf compare.pdf
+```
+
 ## Возможности
 
 | | Что делает | Команда |
