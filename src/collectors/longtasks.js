@@ -21,7 +21,10 @@ module.exports = {
           });
         }
       });
-      po.observe({ entryTypes: ['longtask'] });
+      // buffered: true — отдаёт и те задачи, что уже записаны до подписки.
+      // Без этого long task, случившийся во время парсинга, терялся: отчёт
+      // зависел от того, успел ли колбэк сработать (нестабильная форма JSON).
+      po.observe({ entryTypes: ['longtask'], buffered: true });
     } catch (e) {
       window.__owaLongTasksUnsupported = true;
     }

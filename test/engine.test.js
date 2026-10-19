@@ -139,7 +139,9 @@ test('engine: схема отчёта стабильна между запуск
   try {
     const shapes = [];
     for (let i = 0; i < 2; i++) {
-      const data = await analyze(url, { waitAfterLoad: 150, widgetSelectors: ['#title'] });
+      // waitAfterLoad с запасом: long task фикстуры должен успеть попасть
+      // в отчёт (иначе форма JSON плавает между прогонами).
+      const data = await analyze(url, { waitAfterLoad: 400, widgetSelectors: ['#title'] });
       shapes.push(describe(data));
     }
     assert.deepEqual(shapes[0], shapes[1], 'форма отчёта детерминирована');
