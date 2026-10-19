@@ -179,12 +179,13 @@
   td.act { white-space: nowrap; }
 
   .actions { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-  button.ghost {
+  .ghost {
     background: transparent; color: var(--fg);
     border: 1px solid var(--border); border-radius: 6px;
     padding: 6px 12px; font-size: 12px; font-family: var(--mono); cursor: pointer;
+    text-decoration: none; display: inline-block;
   }
-  button.ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .ghost:hover { border-color: var(--accent); color: var(--accent); }
   pre.json {
     background: var(--bg-inset);
     border: 1px solid var(--border);
@@ -204,6 +205,54 @@
   .chart-card h3 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 12px; }
   .canvas-wrap { position: relative; height: 250px; }
   .chart-nodata { color: var(--muted); font-family: var(--mono); font-size: 12px; padding: 40px 0; text-align: center; }
+
+  /* --- Комплексный аудит / обход / сравнение --- */
+  .score-hero {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin: 16px 0 14px;
+  }
+  .score-hero .big {
+    font-family: var(--mono); font-size: 34px; font-weight: 700;
+    width: 96px; height: 96px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .score-hero .big.good { background: #1a7f37; }
+  .score-hero .big.warn { background: #b7791f; }
+  .score-hero .big.bad { background: #c0392b; }
+  .score-hero .meta { flex: 1; min-width: 220px; font-size: 12px; color: var(--muted); }
+  .score-hero .meta b { color: var(--fg); display: block; font-size: 14px; margin-bottom: 4px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .mcard {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+  }
+  .mcard .name { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .mcard .val { font-family: var(--mono); font-size: 24px; font-weight: 700; margin: 2px 0; }
+  .mcard .val.good { color: var(--green); } .mcard .val.warn { color: var(--yellow); } .mcard .val.bad { color: var(--red); }
+  .mcard .sub { font-size: 11px; color: var(--muted); }
+
+  .issue {
+    border: 1px solid var(--border); border-left-width: 4px; border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 8px; background: var(--panel);
+  }
+  .issue.critical { border-left-color: var(--red); }
+  .issue.warning { border-left-color: var(--yellow); }
+  .issue.info { border-left-color: var(--accent); }
+  .issue .head { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .issue .fix { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .issue .loc { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 3px; word-break: break-all; }
+
+  .cmp-table td.target { background: rgba(108,182,255,.08); font-weight: 600; }
+  .cmp-table th.site { text-align: right; }
+  .cmp-table th.site span { display: block; font-weight: 400; font-size: 10px; text-transform: none; color: var(--muted); }
+  .delta-bad { color: var(--red); } .delta-good { color: var(--green); }
+  .conclusion {
+    border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 8px; background: var(--panel); font-size: 13px;
+  }
+  .conclusion.critical { border-left-color: var(--red); }
+  .conclusion.warning { border-left-color: var(--yellow); }
 
   footer {
     text-align: center; color: var(--muted); font-size: 11px;
@@ -231,8 +280,11 @@
   <h1>OWA</h1>
   <span class="badge">One-Click Web Analyzer</span>
   <nav>
-    <a href="#" id="navAnalyze" class="active">Анализ</a>
-    <a href="#" id="navHistory">История</a>
+    <a href="#" id="navAnalyze" data-section="section-analyze" class="active">Анализ</a>
+    <a href="#" id="navAudit" data-section="section-audit">Аудит</a>
+    <a href="#" id="navCrawl" data-section="section-crawl">Обход</a>
+    <a href="#" id="navCompare" data-section="section-compare">Сравнение</a>
+    <a href="#" id="navHistory" data-section="section-history">История</a>
   </nav>
   <span class="status" id="health"><span class="dot"></span>ready</span>
 </header>
@@ -264,6 +316,79 @@
     <div class="spinner" id="spinner"><span class="ring"></span><span id="spinnerText">Открываю страницу в headless Chromium…</span></div>
     <div class="error" id="error"></div>
     <div id="result"></div>
+  </section>
+
+  <section id="section-audit">
+    <form class="panel" id="auditForm">
+      <div class="row url">
+        <input type="url" id="auditUrl" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
+        <button class="primary" id="auditBtn" type="submit">Полный аудит</button>
+      </div>
+      <details class="options">
+        <summary>Дополнительные параметры</summary>
+        <div class="grid">
+          <label>Ожидание после load, мс
+            <input type="number" id="auditWait" value="2500" min="0" max="60000" step="500">
+          </label>
+          <label>Таймаут навигации, мс
+            <input type="number" id="auditTimeout" value="60000" min="5000" max="120000" step="1000">
+          </label>
+        </div>
+      </details>
+    </form>
+    <div class="spinner" id="auditSpinner"><span class="ring"></span><span>Аудит: Performance, SEO, Security, Accessibility, Content…</span></div>
+    <div class="error" id="auditError"></div>
+    <div id="auditResult"></div>
+  </section>
+
+  <section id="section-crawl">
+    <form class="panel" id="crawlForm">
+      <div class="row url">
+        <input type="url" id="crawlUrl" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
+        <button class="primary" id="crawlBtn" type="submit">Обойти сайт</button>
+      </div>
+      <details class="options">
+        <summary>Дополнительные параметры</summary>
+        <div class="grid">
+          <label>Страниц максимум
+            <input type="number" id="crawlMaxPages" value="10" min="1" max="100" step="1">
+          </label>
+          <label>Глубина обхода
+            <input type="number" id="crawlMaxDepth" value="2" min="0" max="5" step="1">
+          </label>
+          <label>Пауза между страницами, мс
+            <input type="number" id="crawlDelay" value="300" min="0" max="60000" step="100">
+          </label>
+          <label class="check"><input type="checkbox" id="crawlRobots" checked> Соблюдать robots.txt</label>
+        </div>
+      </details>
+    </form>
+    <div class="spinner" id="crawlSpinner"><span class="ring"></span><span>Обход сайта и аудит страниц…</span></div>
+    <div class="error" id="crawlError"></div>
+    <div id="crawlResult"></div>
+  </section>
+
+  <section id="section-compare">
+    <form class="panel" id="compareForm">
+      <div class="row url">
+        <input type="url" id="compareTarget" placeholder="https://client-site.com" required spellcheck="false" autocomplete="off">
+        <button class="primary" id="compareBtn" type="submit">Сравнить</button>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <input type="text" id="compareWith" placeholder="Конкуренты через запятую: https://rival-a.com, https://rival-b.com" spellcheck="false" autocomplete="off" style="flex:1; background:var(--bg-inset); border:1px solid var(--border); border-radius:6px; color:var(--fg); padding:8px 12px; font-family:var(--mono); font-size:13px">
+      </div>
+      <details class="options">
+        <summary>Дополнительные параметры</summary>
+        <div class="grid">
+          <label>Пауза между аудитами, мс
+            <input type="number" id="compareDelay" value="3000" min="0" max="60000" step="500">
+          </label>
+        </div>
+      </details>
+    </form>
+    <div class="spinner" id="compareSpinner"><span class="ring"></span><span>Аудит сайта и конкурентов…</span></div>
+    <div class="error" id="compareError"></div>
+    <div id="compareResult"></div>
   </section>
 
   <section id="section-history">
@@ -306,14 +431,18 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;'
 function showSection(id) {
   document.querySelectorAll('section').forEach((s) => s.classList.remove('active'));
   document.querySelectorAll('header nav a').forEach((a) => a.classList.remove('active'));
-  $(id).classList.add('active');
-  $(id === 'section-analyze' ? 'navAnalyze' : 'navHistory').classList.add('active');
+  const section = $(id);
+  if (!section) return;
+  section.classList.add('active');
+  const link = document.querySelector(`header nav a[data-section="${id}"]`);
+  if (link) link.classList.add('active');
 }
 
 document.querySelectorAll('header nav a').forEach((a) => {
   a.addEventListener('click', (e) => {
     e.preventDefault();
-    showSection(a.getAttribute('href').replace('#', ''));
+    const target = a.getAttribute('data-section');
+    showSection(target);
     if (a.id === 'navHistory') loadHistory();
   });
 });
@@ -791,6 +920,304 @@ function renderDiff(a, b, diff) {
     </table>
   </div>`;
 }
-</script>
+
+/* ================================================================
+   Комплексный аудит / обход / сравнение — ручной сценарий в UI
+   ================================================================ */
+
+const SECTION_NAMES = {
+  performance: 'Производительность',
+  seo: 'SEO',
+  security: 'Безопасность',
+  accessibility: 'Доступность',
+  content: 'Контент',
+};
+
+function scoreClass(score) {
+  if (score === null || score === undefined) return 'bad';
+  if (score >= 85) return 'good';
+  if (score >= 60) return 'warn';
+  return 'bad';
+}
+
+function setBusy(section, busy, btnId) {
+  const spinner = $(section + 'Spinner');
+  const btn = $(btnId);
+  if (spinner) spinner.classList.toggle('on', !!busy);
+  if (btn) btn.disabled = !!busy;
+}
+
+function showError(section, message) {
+  const el = $(section + 'Error');
+  el.textContent = message;
+  el.classList.add('on');
+}
+
+function clearError(section) {
+  const el = $(section + 'Error');
+  el.classList.remove('on');
+  el.textContent = '';
+}
+
+function downloadJson(name, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ------------------------------------------------------------- АУДИТ */
+$('auditForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const url = $('auditUrl').value.trim();
+  if (!url) return;
+  clearError('audit');
+  $('auditResult').innerHTML = '';
+  setBusy('audit', true, 'auditBtn');
+
+  try {
+    const res = await fetch('/api/audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        waitMs: parseInt($('auditWait').value, 10) || 2500,
+        timeoutMs: parseInt($('auditTimeout').value, 10) || 60000,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || ('HTTP ' + res.status));
+    renderAudit(data.report, data.resultId);
+  } catch (err) {
+    showError('audit', 'Ошибка аудита: ' + err.message);
+  } finally {
+    setBusy('audit', false, 'auditBtn');
+  }
+});
+
+function renderAudit(report, resultId) {
+  const sections = report.scores || {};
+  const issues = report.issues || [];
+  const critical = issues.filter((i) => i.severity === 'critical');
+  const warning = issues.filter((i) => i.severity === 'warning');
+  const info = issues.filter((i) => i.severity === 'info');
+
+  const cards = Object.entries(sections).map(([name, sec]) => {
+    const label = SECTION_NAMES[name] || name;
+    const value = sec.score === null ? 'n/a' : sec.score;
+    return '<div class="mcard">'
+      + '<div class="name">' + esc(label) + '</div>'
+      + '<div class="val ' + scoreClass(sec.score) + '">' + esc(value) + '</div>'
+      + '<div class="sub">' + (sec.issues || []).length + ' проблем'
+      + (sec.durationMs ? ' · ' + sec.durationMs + ' мс' : '') + '</div>'
+      + '</div>';
+  }).join('');
+
+  const issueCard = (i) => {
+    const loc = i.location ? '<div class="loc">' + esc(Array.isArray(i.location) ? i.location.join(' ') : i.location) + '</div>' : '';
+    return '<div class="issue ' + esc(i.severity || 'info') + '">'
+      + '<div class="head">' + esc(i.message) + '</div>'
+      + (i.recommendation ? '<div class="fix">Как исправить: ' + esc(i.recommendation) + '</div>' : '')
+      + loc
+      + '</div>';
+  };
+
+  let html = '<div class="actions">'
+    + (resultId ? '<a class="ghost" href="/api/report/pdf?type=audit&id=' + encodeURIComponent(resultId) + '" download>Скачать PDF-отчёт</a>' : '')
+    + '<button class="ghost" id="auditJson">Скачать JSON</button>'
+    + '</div>';
+
+  html += '<div class="score-hero">'
+    + '<div class="big ' + scoreClass(report.integralScore) + '">' + report.integralScore + '</div>'
+    + '<div class="meta"><b>Интегральная оценка</b>'
+    + 'Проблем: ' + issues.length + ' (критичных: ' + critical.length + ', предупреждений: ' + warning.length + ')'
+    + (report.failedSections && report.failedSections.length ? '<br>Не удалось получить секции: ' + esc(report.failedSections.join(', ')) : '')
+    + '<br>' + esc(report.url) + ' · ' + esc(new Date(report.timestamp).toLocaleString('ru-RU'))
+    + '</div></div>';
+
+  html += '<div class="cards">' + cards + '</div>';
+
+  if (issues.length) {
+    html += '<div class="card"><h2>Проблемы по приоритету</h2><div style="padding:14px 16px;">';
+    for (const i of [...critical, ...warning, ...info]) html += issueCard(i);
+    html += '</div></div>';
+  } else {
+    html += '<div class="card"><h2>Проблемы</h2><div style="padding:16px;color:var(--muted)">Критичных проблем не обнаружено.</div></div>';
+  }
+
+  $('auditResult').innerHTML = html;
+  $('auditJson').addEventListener('click', () => downloadJson('owa-audit.json', report));
+}
+
+/* ------------------------------------------------------------ ОБХОД */
+$('crawlForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const url = $('crawlUrl').value.trim();
+  if (!url) return;
+  clearError('crawl');
+  $('crawlResult').innerHTML = '';
+  setBusy('crawl', true, 'crawlBtn');
+
+  try {
+    const res = await fetch('/api/crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        maxPages: parseInt($('crawlMaxPages').value, 10) || 10,
+        maxDepth: parseInt($('crawlMaxDepth').value, 10) || 2,
+        delayMs: parseInt($('crawlDelay').value, 10) || 0,
+        respectRobots: $('crawlRobots').checked,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || ('HTTP ' + res.status));
+    renderCrawl(data.report);
+  } catch (err) {
+    showError('crawl', 'Ошибка обхода: ' + err.message);
+  } finally {
+    setBusy('crawl', false, 'crawlBtn');
+  }
+});
+
+function renderCrawl(report) {
+  const a = report.aggregate || {};
+  const pages = report.pages || [];
+  const kb = (v) => (v === null || v === undefined ? '—' : v);
+
+  const cards = '<div class="cards">'
+    + '<div class="mcard"><div class="name">Страниц</div><div class="val">' + (a.pageCount || 0) + '</div><div class="sub">ошибок: ' + (a.failedCount || 0) + '</div></div>'
+    + '<div class="mcard"><div class="name">Средняя оценка</div><div class="val ' + scoreClass(a.avgScore) + '">' + kb(a.avgScore) + '</div><div class="sub">по разделам</div></div>'
+    + '<div class="mcard"><div class="name">LCP (среднее)</div><div class="val">' + kb(a.avgMetrics && a.avgMetrics.lcpMs) + '</div><div class="sub">мс</div></div>'
+    + '<div class="mcard"><div class="name">TTFB (среднее)</div><div class="val">' + kb(a.avgMetrics && a.avgMetrics.ttfbMs) + '</div><div class="sub">мс</div></div>'
+    + '</div>';
+
+  let rows = '';
+  for (const p of pages) {
+    rows += '<tr>'
+      + '<td class="sel" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(p.url) + '</td>'
+      + '<td class="num"><span class="v ' + scoreClass(p.score) + '">' + (p.score === null ? 'ошибка' : p.score) + '</span></td>'
+      + '<td class="num">' + (p.scores ? p.scores.performance ?? '—' : '—') + '</td>'
+      + '<td class="num">' + (p.scores ? p.scores.seo ?? '—' : '—') + '</td>'
+      + '<td class="num">' + (p.scores ? p.scores.accessibility ?? '—' : '—') + '</td>'
+      + '<td class="num">' + (p.issues || []).length + '</td>'
+      + '</tr>';
+  }
+
+  let topIssues = '';
+  for (const issue of (a.topIssues || [])) {
+    topIssues += '<tr><td class="sel">' + esc(issue.rule) + '</td>'
+      + '<td>' + esc(issue.severity) + '</td>'
+      + '<td class="num">' + issue.count + '</td>'
+      + '<td class="sel" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc((issue.pages || []).join(', ')) + '</td></tr>';
+  }
+
+  $('crawlResult').innerHTML = '<div class="actions"><button class="ghost" id="crawlJson">Скачать JSON</button></div>'
+    + cards
+    + '<div class="card"><h2>Страницы (' + pages.length + ')</h2><table>'
+    + '<tr><th>URL</th><th style="text-align:right">Оценка</th><th style="text-align:right">Perf</th><th style="text-align:right">SEO</th><th style="text-align:right">A11y</th><th style="text-align:right">Проблем</th></tr>'
+    + rows + '</table></div>'
+    + (topIssues ? '<div class="card"><h2>Топ проблем по частоте</h2><table>'
+      + '<tr><th>Правило</th><th>Уровень</th><th style="text-align:right">Страниц</th><th>Где</th></tr>'
+      + topIssues + '</table></div>' : '');
+
+  $('crawlJson').addEventListener('click', () => downloadJson('owa-crawl.json', report));
+}
+
+/* ---------------------------------------------------------- СРАВНЕНИЕ */
+$('compareForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const target = $('compareTarget').value.trim();
+  const competitors = $('compareWith').value.split(',').map((s) => s.trim()).filter(Boolean);
+  if (!target) return;
+  if (!competitors.length) {
+    showError('compare', 'Укажите хотя бы одного конкурента (через запятую)');
+    return;
+  }
+  clearError('compare');
+  $('compareResult').innerHTML = '';
+  setBusy('compare', true, 'compareBtn');
+
+  try {
+    const res = await fetch('/api/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target,
+        competitors,
+        delayMs: parseInt($('compareDelay').value, 10) || 0,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || ('HTTP ' + res.status));
+    renderCompare(data.report, data.resultId);
+  } catch (err) {
+    showError('compare', 'Ошибка сравнения: ' + err.message);
+  } finally {
+    setBusy('compare', false, 'compareBtn');
+  }
+});
+
+function renderCompare(report, resultId) {
+  const sites = report.sites || [];
+  const target = report.target;
+
+  const head = sites.map((s) => '<th class="site">'
+    + (s.role === 'target' ? 'Ваш сайт' : 'Конкурент')
+    + '<span>' + esc(s.label) + '</span></th>').join('');
+
+  let sectionRows = '';
+  for (const row of report.sectionRows || []) {
+    const cells = sites.map((s) => {
+      const v = row.values[s.url];
+      const cls = s.role === 'target' ? ' target' : '';
+      return '<td class="num' + cls + '">' + (v === null || v === undefined ? '—' : esc(v)) + '</td>';
+    }).join('');
+    const delta = row.deltaToBest;
+    const deltaCls = delta === null || delta === undefined ? '' : (delta > 0 ? ' delta-bad' : delta < 0 ? ' delta-good' : '');
+    const deltaText = delta === null || delta === undefined ? '—' : (delta > 0 ? '+' : '') + delta;
+    sectionRows += '<tr><td>' + esc(row.label) + '</td>' + cells
+      + '<td class="num' + deltaCls + '">' + deltaText + '</td></tr>';
+  }
+
+  let metricRows = '';
+  for (const row of report.metricRows || []) {
+    const cells = sites.map((s) => {
+      const v = row.values[s.url];
+      const cls = s.role === 'target' ? ' target' : '';
+      return '<td class="num' + cls + '">' + (v === null || v === undefined ? '—' : esc(v) + esc(row.unit)) + '</td>';
+    }).join('');
+    metricRows += '<tr><td>' + esc(row.label) + '</td>' + cells + '</tr>';
+  }
+
+  let conclusions = '';
+  for (const c of report.conclusions || []) {
+    conclusions += '<div class="conclusion ' + esc(c.severity || 'info') + '">' + esc(c.text) + '</div>';
+  }
+
+  const cards = sites.map((s) => '<div class="mcard">'
+    + '<div class="name">' + (s.role === 'target' ? 'Ваш сайт' : 'Конкурент') + '</div>'
+    + '<div class="name" style="text-transform:none;letter-spacing:0">' + esc(s.label) + '</div>'
+    + '<div class="val ' + scoreClass(s.avgSectionScore) + '">' + (s.avgSectionScore === null ? 'n/a' : s.avgSectionScore) + '</div>'
+    + '<div class="sub">' + s.issueCount + ' проблем</div>'
+    + '</div>').join('');
+
+  $('compareResult').innerHTML = '<div class="actions">'
+    + (resultId ? '<a class="ghost" href="/api/report/pdf?type=compare&id=' + encodeURIComponent(resultId) + '" download>Скачать PDF со сравнением</a>' : '')
+    + '<button class="ghost" id="compareJson">Скачать JSON</button>'
+    + '</div>'
+    + '<div class="cards">' + cards + '</div>'
+    + '<div class="card"><h2>Оценки по разделам</h2><table class="cmp-table">'
+    + '<tr><th>Раздел</th>' + head + '<th style="text-align:right">Отставание</th></tr>'
+    + sectionRows + '</table></div>'
+    + '<div class="card"><h2>Ключевые метрики</h2><table class="cmp-table">'
+    + '<tr><th>Метрика</th>' + head + '</tr>'
+    + metricRows + '</table></div>'
+    + (conclusions ? '<div class="card"><h2>Выводы</h2><div style="padding:14px 16px;">' + conclusions + '</div></div>' : '');
+
+  $('compareJson').addEventListener('click', () => downloadJson('owa-compare.json', report));
+}</script>
 </body>
 </html>

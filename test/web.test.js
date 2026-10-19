@@ -390,3 +390,86 @@ test('rate-limit: разные IP не делят квоту (по IP+path)', as
   assert.strictEqual(limiter.check('1.1.1.1', '/api/health'), 0); // другой path — не пересекает
 });
 
+
+// --------------------------------------------- комплексный аудит: HTTP-роуты
+
+test('POST /api/audit: без url -> 400 VALIDATION', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/audit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual((await r.json()).error, 'VALIDATION');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('POST /api/crawl: невалидные параметры -> 400 VALIDATION', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/crawl`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://a.test', maxPages: 999 }),
+    });
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual((await r.json()).error, 'VALIDATION');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('POST /api/compare: без конкурентов -> 400 VALIDATION', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/compare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'https://a.test' }),
+    });
+    assert.strictEqual(r.status, 400);
+    const body = await r.json();
+    assert.strictEqual(body.error, 'VALIDATION');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('GET /api/report/pdf: неизвестный id -> 404 NOT_FOUND', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/report/pdf?type=audit&id=missing`);
+    assert.strictEqual(r.status, 404);
+    assert.strictEqual((await r.json()).error, 'NOT_FOUND');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('GET /api/report/pdf: неверный type -> 400 VALIDATION', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/report/pdf?type=bogus&id=x`);
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual((await r.json()).error, 'VALIDATION');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('UI: страница содержит разделы аудита, обхода и сравнения', async () => {
+  const ctx = await startApp();
+  try {
+    const html = await (await fetch(`${ctx.base}/`)).text();
+    for (const id of ['section-audit', 'section-crawl', 'section-compare', 'auditForm', 'crawlForm', 'compareForm']) {
+      assert.ok(html.includes(id), 'в UI есть ' + id);
+    }
+    assert.ok(html.includes('navAudit') && html.includes('navCrawl') && html.includes('navCompare'), 'вкладки в навигации');
+  } finally {
+    await ctx.stop();
+  }
+});

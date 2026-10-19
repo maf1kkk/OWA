@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================
-#  OWA - откат модулей 0-5 (аудит, PDF, SSRF, crawl) без Git
+#  OWA - откат модулей 0-5 + веб-UI (аудит, PDF, SSRF, crawl, compare) без Git
 #
 #  Восстанавливает изменённые файлы из .rollback-backup/original
 #  и удаляет добавленные модули. Работает без доступа к Git.
@@ -18,7 +18,7 @@ fi
 echo "[1/2] Восстанавливаю изменённые файлы..."
 for f in .env.example .github/workflows/test.yml .gitignore CHANGELOG.md README.md \
          bin/owa.js mcp/server.js package-lock.json package.json scripts/check-env.js \
-         web/routes/api.js; do
+         web/app.js web/routes/api.js; do
   if [ -f ".rollback-backup/original/$f" ]; then
     cp ".rollback-backup/original/$f" "$f"
     echo "  + $f"
@@ -26,15 +26,20 @@ for f in .env.example .github/workflows/test.yml .gitignore CHANGELOG.md README.
 done
 
 echo "[2/2] Удаляю добавленные модули..."
-for d in src/audit src/crawl src/core src/report src/security templates; do
+for d in src/audit src/crawl src/compare src/core src/report src/security templates; do
   if [ -d "$d" ]; then
     rm -rf "$d"
     echo "  - $d"
   fi
 done
 
-for f in test/audit.test.js test/crawl.test.js test/orchestrator.test.js \
-         test/pdf.test.js test/ssrf.test.js; do
+if [ -f "web/routes/audit.js" ]; then
+  rm -f "web/routes/audit.js"
+  echo "  - web/routes/audit.js"
+fi
+
+for f in test/audit.test.js test/crawl.test.js test/compare.test.js \
+         test/orchestrator.test.js test/pdf.test.js test/ssrf.test.js; do
   if [ -f "$f" ]; then
     rm -f "$f"
     echo "  - $f"

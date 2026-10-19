@@ -12,6 +12,7 @@ const { createRepos } = require('../src/db/repositories');
 const { createApiRouter } = require('./routes/api');
 const { createCodeAnalysisRouter } = require('./routes/code-analysis');
 const { createAiRouter } = require('./routes/ai');
+const { createAuditRouter } = require('./routes/audit');
 const { errorHandler, notFoundHandler, HttpError } = require('./middleware/validate');
 const { requireAuth, attachHeader } = require('./middleware/auth');
 const { createRateLimiter } = require('./rate-limit');
@@ -75,6 +76,7 @@ function createApp({ db, auth, env = process.env }) {
   const rateLimit = createRateLimitMiddleware(env);
   if (rateLimit) app.use(rateLimit);
   app.use(createApiRouter({ repos }));
+  app.use(createAuditRouter({ repos }));
   app.use(createCodeAnalysisRouter({ repos }));
   app.use(createAiRouter({ repos }));
 
