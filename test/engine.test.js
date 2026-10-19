@@ -25,9 +25,11 @@ function startServer() {
   <h1 id="title">Привет</h1>
   <div id="scoreboard">макет виджета</div>
   <script>
-    // долгая задача (~120 мс) для PerformanceObserver long tasks
+    // Долгая задача (~300 мс) для PerformanceObserver long tasks.
+    // Держим заметно выше порога 50 мс, чтобы задача гарантированно
+    // регистрировалась наблюдателем (иначе тест формы отчёта флейкает).
     const t0 = Date.now();
-    while (Date.now() - t0 < 120) {}
+    while (Date.now() - t0 < 300) {}
     window.__owa = true;
   </script>
 </body>
@@ -142,7 +144,13 @@ test('engine: схема отчёта стабильна между запуск
       // waitAfterLoad с запасом: long task фикстуры должен успеть попасть
       // в отчёт (иначе форма JSON плавает между прогонами).
       const data = await analyze(url, { waitAfterLoad: 400, widgetSelectors: ['#title'] });
-      shapes.push(describe(data));
+      // Количество long tasks зависит от тайминга браузера, а не от схемы
+      // отчёта: сравниваем форму, а не содержимое этого массива.
+      const normalized = JSON.parse(JSON.stringify(data));
+      if (normalized.metrics && normalized.metrics.longTasks) {
+        normalized.metrics.longTasks.tasks = '[volatile]';
+      }
+      shapes.push(describe(normalized));
     }
     assert.deepEqual(shapes[0], shapes[1], 'форма отчёта детерминирована');
   } finally {
