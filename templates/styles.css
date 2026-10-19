@@ -88,3 +88,19 @@ td.num { text-align: right; font-family: "Courier New", monospace; }
 }
 .disclaimer { font-size: 8.5pt; color: #6b7280; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e6e8eb; }
 .page-break { page-break-before: always; }
+/* --- Сравнительный отчёт --- */
+.compare-title { font-size: 20pt; margin: 12px 0 4px; }
+.compare-target { font-size: 13pt; font-weight: 700; color: #1b1f24; word-break: break-all; }
+.site-cards { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 20px; }
+.site-card { border: 1px solid #d8dce1; border-radius: 6px; padding: 10px 14px; min-width: 150px; text-align: center; }
+.site-card.target { border-color: #3b82f6; border-width: 2px; background: #f5f9ff; }
+.site-card .name { font-size: 9pt; color: #4b5563; word-break: break-all; }
+.site-card .val { font-size: 19pt; font-weight: 700; margin-top: 2px; }
+.site-card .role { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; }
+.val.good { color: #1a7f37; } .val.warn { color: #b7791f; } .val.bad { color: #c0392b; }
+td.target-cell { background: #f5f9ff; font-weight: 600; }
+td.lead { color: #1a7f37; font-weight: 600; }
+.conclusion { border: 1px solid #e2e5e9; border-left: 4px solid #3b82f6; border-radius: 4px; padding: 9px 12px; margin-bottom: 8px; page-break-inside: avoid; font-size: 9.5pt; }
+.conclusion.critical { border-left-color: #c0392b; }
+.conclusion.warning { border-left-color: #b7791f; }
+.conclusion.info { border-left-color: #3b82f6; }

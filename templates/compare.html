@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>OWA — Сравнительный аудит</title>
+<style>__STYLES__</style>
+</head>
+<body>
+  <div class="footer">
+    <span>OWA — сравнительный аудит сайта</span>
+    <span>__DATE_SHORT__</span>
+  </div>
+
+  <div class="cover">
+    <div class="brand">OWA · One-Click Web Analyzer</div>
+    <h1>Сравнительный аудит</h1>
+    <div class="url">__TARGET_URL__</div>
+    <div class="date">Дата: __DATE_LONG__ · конкурентов: __COMPETITOR_COUNT__</div>
+
+    <div class="section-scores">
+      __SITE_CARDS__
+    </div>
+
+    <div class="chart" style="margin-top:22px">
+      <img src="__BARS_CHART__" alt="Оценки по секциям аудита">
+      <div class="caption">Оценки по секциям аудита: ваш сайт против конкурентов</div>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>Оценки по разделам</h2>
+  <table>
+    <tr><th>Раздел</th>__SITE_HEADERS__<th>Лидер</th><th>Отставание</th></tr>
+    __SECTION_ROWS__
+  </table>
+
+  <h2>Ключевые метрики</h2>
+  <table>
+    <tr><th>Метрика</th>__SITE_HEADERS__<th>Лучшее значение</th></tr>
+    __METRIC_ROWS__
+  </table>
+
+  <div class="chart">
+    <img src="__METRICS_CHART__" alt="Ключевые метрики по сайтам">
+    <div class="caption">Ключевые метрики: LCP и TTFB по сайтам (меньше — лучше)</div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>Выводы</h2>
+  __CONCLUSIONS__
+
+  <div class="disclaimer">
+    Отчёт сформирован автоматически инструментом OWA на основе фактических измерений
+    в headless Chromium (Performance API, axe-core, проверки HTTP-заголовков и мета-тегов).
+    Оценки отражают состояние сайтов на момент аудита и носят рекомендательный характер.
+    <br>
+    Повторный аудит: <span>owa compare --target __TARGET_URL__ --with __COMPETITORS__</span>
+  </div>
+</body>
+</html>

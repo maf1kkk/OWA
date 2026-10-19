@@ -55,6 +55,8 @@ function parseArgs(argv) {
       case '--max-pages': args.maxPages = parseInt(argv[++i], 10); break;
       case '--max-depth': args.maxDepth = parseInt(argv[++i], 10); break;
       case '--delay': args.delay = parseInt(argv[++i], 10); break;
+      case '--target': args.target = argv[++i]; break;
+      case '--with': args.with = argv[++i]; break;
       case '--ignore-robots': args.ignoreRobots = true; break;
       case '--no-audit': args.noAudit = true; break;
       case '--selector': {
@@ -89,6 +91,7 @@ function usage() {
 Использование:
   node bin/owa.js audit --full <URL> [--out audit.json] [--json]
   node bin/owa.js report --pdf <файл.pdf> --url <URL>
+  node bin/owa.js compare --target <URL> --with <url1>,<url2> [--pdf файл]
   node bin/owa.js crawl <URL> [--max-pages N] [--max-depth N] [--delay мс]
   node bin/owa.js sitemap <URL>/sitemap.xml [--max-pages N]
   node bin/owa.js <URL> [опции]
@@ -98,8 +101,10 @@ function usage() {
   --compact            компактный JSON с готовой интерпретацией
   --out <файл>         сохранить полный JSON
   --md <файл>          сохранить Markdown-отчёт
-  --pdf <файл>         сохранить PDF-отчёт (команда report)
+  --pdf <файл>         сохранить PDF-отчёт (report / compare)
   --url <URL>          целевой URL (команда report)
+  --target <URL>       сайт клиента (команда compare)
+  --with <url1>,<url2> конкуренты через запятую (команда compare)
   --full               полный аудит (команда audit)
   --max-pages <N>      сколько страниц обойти (crawl/sitemap, по умолч. 10)
   --max-depth <N>      глубина обхода (по умолч. 2)
@@ -118,6 +123,95 @@ function usage() {
 
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0];
+
+// ------------------------------------------------------------ compare
+if (command === 'compare') {
+  const target = args.target;
+  const competitors = String(args.with || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (!target || !/^https?:\/\//i.test(target)) {
+    console.error('Команда compare требует --target <URL>');
+    process.exit(2);
+  }
+  if (!competitors.length) {
+    console.error('Команда compare требует --with <url1>,<url2> (конкуренты через запятую)');
+    process.exit(2);
+  }
+
+  (async () => {
+    try {
+      const { compareSites } = require('../src/compare');
+      const result = await compareSites(target, competitors, {
+        // Пауза между аудитами: чужие сайты не нагружаем.
+        delayMs: Number.isFinite(args.delay) ? args.delay : 3000,
+        timeout: args.timeout ?? 60000,
+        waitAfterLoad: args.wait ?? 2500,
+        logger: args.json ? () => {} : (m) => console.error('[compare] ' + m),
+      });
+
+      if (args.out) {
+        fs.writeFileSync(path.resolve(args.out), JSON.stringify(result, null, 2), 'utf8');
+        if (!args.json) console.error(`JSON-отчёт сохранён: ${args.out}`);
+      }
+      if (args.pdf) {
+        const { generateComparePdf } = require('../src/report/compare-pdf');
+        const out = path.resolve(args.pdf);
+        await generateComparePdf(result, out);
+        if (!args.json) console.error(`PDF-отчёт сохранён: ${out}`);
+      }
+
+      if (args.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        printCompareReport(result);
+      }
+      process.exit(0);
+    } catch (err) {
+      if (args.json) {
+        console.log(JSON.stringify({ error: String(err && err.message || err) }, null, 2));
+      } else {
+        console.error(`Ошибка: ${err && err.message || err}`);
+      }
+      process.exit(2);
+    }
+  })();
+  return;
+}
+
+/** Текстовый вывод сравнительного отчёта. */
+function printCompareReport(result) {
+  const line = '-'.repeat(70);
+  console.log(`\n${line}`);
+  console.log('  OWA — Сравнительный аудит');
+  console.log(`  Ваш сайт: ${result.target.url}`);
+  console.log(`  Конкуренты: ${result.competitors.map((c) => c.label).join(', ')}`);
+  console.log(line);
+
+  console.log('\n■ Оценки по разделам');
+  for (const row of result.sectionRows) {
+    const cells = result.sites
+      .map((s) => (s.role === 'target' ? 'ВЫ' : s.label).padEnd(18) + String(row.values[s.url] ?? '—').padStart(4));
+    const delta = row.deltaToBest === null || row.deltaToBest === undefined ? '—' : String(row.deltaToBest);
+    console.log('  ' + row.label.padEnd(20) + cells.join('  ') + '   отставание: ' + delta);
+  }
+
+  console.log('\n■ Ключевые метрики');
+  for (const row of result.metricRows) {
+    const cells = result.sites.map((s) => String(row.values[s.url] ?? '—').padStart(8));
+    console.log('  ' + row.label.padEnd(10) + cells.join('  ') + row.unit);
+  }
+
+  if (result.conclusions.length) {
+    console.log('\n■ Выводы');
+    for (const c of result.conclusions) {
+      console.log('  [' + (c.severity || 'info') + '] ' + c.text);
+    }
+  }
+  console.log(`\n${line}\n`);
+}
 
 // ------------------------------------------------------- crawl / sitemap
 if (command === 'crawl' || command === 'sitemap') {

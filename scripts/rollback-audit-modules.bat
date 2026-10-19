@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================
-REM  OWA - откат модулей 0-4 (аудит, PDF, SSRF, crawl) без Git
+REM  OWA - откат модулей 0-5 (аудит, PDF, SSRF, crawl) без Git
 REM
 REM  Восстанавливает изменённые файлы из .rollback-backup\original
 REM  и удаляет добавленные модули. Работает без доступа к Git.
@@ -38,6 +38,7 @@ for %%F in (
 echo [2/2] Удаляю добавленные модули...
 for %%D in (
   src\audit
+  src\compare
   src\crawl
   src\core
   src\report
@@ -52,6 +53,7 @@ for %%D in (
 for %%F in (
   test\audit.test.js
   test\crawl.test.js
+  test\compare.test.js
   test\orchestrator.test.js
   test\pdf.test.js
   test\ssrf.test.js
