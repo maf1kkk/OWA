@@ -20,6 +20,7 @@ report_*.json
 report_*.md
 
 # --- Артефакты тестов и CI ---
+.e2e/
 coverage/
 dist/
 build/

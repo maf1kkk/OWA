@@ -283,12 +283,12 @@
   <h1>OWA</h1>
   <span class="badge">One-Click Web Analyzer</span>
   <nav>
-    <a href="#" id="navAnalyze" data-section="section-analyze" class="active">Анализ</a>
-    <a href="#" id="navAudit" data-section="section-audit">Аудит</a>
-    <a href="#" id="navCrawl" data-section="section-crawl">Обход</a>
-    <a href="#" id="navCompare" data-section="section-compare">Сравнение</a>
-    <a href="#" id="navHistory" data-section="section-history">История</a>
-    <a href="#" id="navSession" title="Сводный PDF по всем проверкам за сессию">Отчёт за сессию</a>
+    <a href="#" id="navAnalyze" data-testid="nav-analyze" data-section="section-analyze" class="active">Анализ</a>
+    <a href="#" id="navAudit" data-testid="nav-audit" data-section="section-audit">Аудит</a>
+    <a href="#" id="navCrawl" data-testid="nav-crawl" data-section="section-crawl">Обход</a>
+    <a href="#" id="navCompare" data-testid="nav-compare" data-section="section-compare">Сравнение</a>
+    <a href="#" id="navHistory" data-testid="nav-history" data-section="section-history">История</a>
+    <a href="#" id="navSession" data-testid="nav-session" title="Сводный PDF по всем проверкам за сессию">Отчёт за сессию</a>
   </nav>
   <span class="status" id="health"><span class="dot"></span>ready</span>
 </header>
@@ -297,8 +297,8 @@
   <section id="section-analyze" class="active">
     <form class="panel" id="form">
       <div class="row url">
-        <input type="url" id="url" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
-        <button class="primary" id="btn" type="submit">Анализировать</button>
+        <input type="url" id="url" data-testid="analyze-url" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
+        <button class="primary" id="btn" data-testid="analyze-run" type="submit">Анализировать</button>
       </div>
       <details class="options">
         <summary>Дополнительные параметры</summary>
@@ -319,14 +319,14 @@
 
     <div class="spinner" id="spinner"><span class="ring"></span><span id="spinnerText">Открываю страницу в headless Chromium…</span></div>
     <div class="error" id="error"></div>
-    <div id="result"></div>
+    <div id="result" data-testid="analyze-result"></div>
   </section>
 
   <section id="section-audit">
     <form class="panel" id="auditForm">
       <div class="row url">
-        <input type="url" id="auditUrl" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
-        <button class="primary" id="auditBtn" type="submit">Полный аудит</button>
+        <input type="url" id="auditUrl" data-testid="audit-url" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
+        <button class="primary" id="auditBtn" data-testid="audit-run" type="submit">Полный аудит</button>
       </div>
       <details class="options">
         <summary>Дополнительные параметры</summary>
@@ -342,14 +342,14 @@
     </form>
     <div class="spinner" id="auditSpinner"><span class="ring"></span><span>Аудит: Performance, SEO, Security, Accessibility, Content…</span></div>
     <div class="error" id="auditError"></div>
-    <div id="auditResult"></div>
+    <div id="auditResult" data-testid="audit-result"></div>
   </section>
 
   <section id="section-crawl">
     <form class="panel" id="crawlForm">
       <div class="row url">
-        <input type="url" id="crawlUrl" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
-        <button class="primary" id="crawlBtn" type="submit">Обойти сайт</button>
+        <input type="url" id="crawlUrl" data-testid="crawl-url" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
+        <button class="primary" id="crawlBtn" data-testid="crawl-run" type="submit">Обойти сайт</button>
       </div>
       <details class="options">
         <summary>Дополнительные параметры</summary>
@@ -372,17 +372,17 @@
     </form>
     <div class="spinner" id="crawlSpinner"><span class="ring"></span><span>Обход сайта и аудит страниц…</span></div>
     <div class="error" id="crawlError"></div>
-    <div id="crawlResult"></div>
+    <div id="crawlResult" data-testid="crawl-result"></div>
   </section>
 
   <section id="section-compare">
     <form class="panel" id="compareForm">
       <div class="row url">
-        <input type="url" id="compareTarget" placeholder="https://client-site.com" required spellcheck="false" autocomplete="off">
-        <button class="primary" id="compareBtn" type="submit">Сравнить</button>
+        <input type="url" id="compareTarget" data-testid="compare-target" placeholder="https://client-site.com" required spellcheck="false" autocomplete="off">
+        <button class="primary" id="compareBtn" data-testid="compare-run" type="submit">Сравнить</button>
       </div>
       <div class="row" style="margin-bottom:8px">
-        <input type="text" id="compareWith" placeholder="Конкуренты через запятую: https://rival-a.com, https://rival-b.com" spellcheck="false" autocomplete="off" style="flex:1; background:var(--bg-inset); border:1px solid var(--border); border-radius:6px; color:var(--fg); padding:8px 12px; font-family:var(--mono); font-size:13px">
+        <input type="text" id="compareWith" data-testid="compare-with" placeholder="Конкуренты через запятую: https://rival-a.com, https://rival-b.com" spellcheck="false" autocomplete="off" style="flex:1; background:var(--bg-inset); border:1px solid var(--border); border-radius:6px; color:var(--fg); padding:8px 12px; font-family:var(--mono); font-size:13px">
       </div>
       <details class="options">
         <summary>Дополнительные параметры</summary>
@@ -395,19 +395,19 @@
     </form>
     <div class="spinner" id="compareSpinner"><span class="ring"></span><span>Аудит сайта и конкурентов…</span></div>
     <div class="error" id="compareError"></div>
-    <div id="compareResult"></div>
+    <div id="compareResult" data-testid="compare-result"></div>
   </section>
 
   <section id="section-history">
     <div class="toolbar">
       <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">URL:</span>
-      <select id="histUrl"><option value="">все сайты</option></select>
-      <button class="ghost" id="btnRefreshHistory">Обновить</button>
+      <select id="histUrl" data-testid="history-url"><option value="">все сайты</option></select>
+      <button class="ghost" id="btnRefreshHistory" data-testid="history-refresh">Обновить</button>
       <a class="ghost" id="btnHistoryGraphs" style="margin-left:auto">Графики по метрикам →</a>
     </div>
 
     <div id="historyEmpty" class="empty">Анализа ещё нет. Запустите анализ любого сайта выше.</div>
-    <table id="historyTable">
+    <table id="historyTable" data-testid="history-table">
       <thead>
         <tr><th>Дата</th><th>URL</th><th style="text-align:right">Скор</th><th>Статус</th><th style="text-align:right">Длительность</th><th style="width:180px">Действия</th></tr>
       </thead>
@@ -548,7 +548,7 @@ function render(url, d, resultId) {
     <button class="ghost" id="btnJson">Показать JSON (для ИИ)</button>
     <button class="ghost" id="btnCopy">Скопировать компактный JSON</button>
     <button class="ghost" id="btnDownload">Скачать отчёт .json</button>
-    <a class="ghost" id="btnPdf" href="#" download>Скачать PDF-отчёт</a>
+    <a class="ghost" id="btnPdf" data-testid="analyze-pdf" href="#" download>Скачать PDF-отчёт</a>
     <button class="ghost" id="btnPrint">Печать экрана</button>
   </div>
 
@@ -1052,7 +1052,7 @@ function renderAudit(report, resultId) {
   const cards = Object.entries(sections).map(([name, sec]) => {
     const label = SECTION_NAMES[name] || name;
     const value = sec.score === null ? 'n/a' : sec.score;
-    return '<div class="mcard">'
+    return '<div class="mcard" data-testid="audit-card-' + esc(name) + '">'
       + '<div class="name">' + esc(label) + '</div>'
       + '<div class="val ' + scoreClass(sec.score) + '">' + esc(value) + '</div>'
       + '<div class="sub">' + (sec.issues || []).length + ' проблем'
@@ -1062,9 +1062,9 @@ function renderAudit(report, resultId) {
 
   const issueCard = (i) => {
     const loc = i.location ? '<div class="loc">' + esc(Array.isArray(i.location) ? i.location.join(' ') : i.location) + '</div>' : '';
-    return '<div class="issue ' + esc(i.severity || 'info') + '">'
+    return '<div class="issue ' + esc(i.severity || 'info') + '" data-testid="issue-' + esc(i.severity || 'info') + '">'
       + '<div class="head">' + esc(i.message) + '</div>'
-      + (i.recommendation ? '<div class="fix">Как исправить: ' + esc(i.recommendation) + '</div>' : '')
+      + (i.recommendation ? '<div class="fix" data-testid="issue-fix">Как исправить: ' + esc(i.recommendation) + '</div>' : '')
       + loc
       + '</div>';
   };
@@ -1134,10 +1134,10 @@ function renderCrawl(report, resultId) {
   const kb = (v) => (v === null || v === undefined ? '—' : v);
 
   const cards = '<div class="cards">'
-    + '<div class="mcard"><div class="name">Страниц</div><div class="val">' + (a.pageCount || 0) + '</div><div class="sub">ошибок: ' + (a.failedCount || 0) + '</div></div>'
-    + '<div class="mcard"><div class="name">Средняя оценка</div><div class="val ' + scoreClass(a.avgScore) + '">' + kb(a.avgScore) + '</div><div class="sub">по разделам</div></div>'
-    + '<div class="mcard"><div class="name">LCP (среднее)</div><div class="val">' + kb(a.avgMetrics && a.avgMetrics.lcpMs) + '</div><div class="sub">мс</div></div>'
-    + '<div class="mcard"><div class="name">TTFB (среднее)</div><div class="val">' + kb(a.avgMetrics && a.avgMetrics.ttfbMs) + '</div><div class="sub">мс</div></div>'
+    + '<div class="mcard" data-testid="crawl-card-pages"><div class="name">Страниц</div><div class="val">' + (a.pageCount || 0) + '</div><div class="sub">ошибок: ' + (a.failedCount || 0) + '</div></div>'
+    + '<div class="mcard" data-testid="crawl-card-score"><div class="name">Средняя оценка</div><div class="val ' + scoreClass(a.avgScore) + '">' + kb(a.avgScore) + '</div><div class="sub">по разделам</div></div>'
+    + '<div class="mcard" data-testid="crawl-card-lcp"><div class="name">LCP (среднее)</div><div class="val">' + kb(a.avgMetrics && a.avgMetrics.lcpMs) + '</div><div class="sub">мс</div></div>'
+    + '<div class="mcard" data-testid="crawl-card-ttfb"><div class="name">TTFB (среднее)</div><div class="val">' + kb(a.avgMetrics && a.avgMetrics.ttfbMs) + '</div><div class="sub">мс</div></div>'
     + '</div>';
 
   let rows = '';
@@ -1253,7 +1253,7 @@ function renderCompare(report, resultId) {
     conclusions += '<div class="conclusion ' + esc(c.severity || 'info') + '">' + esc(c.text) + '</div>';
   }
 
-  const cards = sites.map((s) => '<div class="mcard">'
+  const cards = sites.map((s, i) => '<div class="mcard" data-testid="compare-card-' + (s.role === 'target' ? 'target' : 'competitor' + i) + '">'
     + '<div class="name">' + (s.role === 'target' ? 'Ваш сайт' : 'Конкурент') + '</div>'
     + '<div class="name" style="text-transform:none;letter-spacing:0">' + esc(s.label) + '</div>'
     + '<div class="val ' + scoreClass(s.avgSectionScore) + '">' + (s.avgSectionScore === null ? 'n/a' : s.avgSectionScore) + '</div>'

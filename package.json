@@ -15,7 +15,9 @@
     "mcp": "node mcp/server.js",
     "test": "node --test \"test/*.test.js\"",
     "migrate": "node scripts/migrate.js",
-    "check-env": "node scripts/check-env.js"
+    "check-env": "node scripts/check-env.js",
+    "test:e2e": "node scripts/e2e-run.mjs",
+    "test:all": "npm test && npm run test:e2e"
   },
   "keywords": [
     "performance",
@@ -56,5 +58,10 @@
     "ssrf-guard": "^1.0.0",
     "undici": "^8.12.3",
     "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@e2e-dev/github": "^0.4.2",
+    "@e2e-dev/web": "^0.15.2",
+    "e2e": "^0.21.2"
   }
 }
