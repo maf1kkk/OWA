@@ -55,6 +55,7 @@ function parseArgs(argv) {
       case '--max-pages': args.maxPages = parseInt(argv[++i], 10); break;
       case '--max-depth': args.maxDepth = parseInt(argv[++i], 10); break;
       case '--delay': args.delay = parseInt(argv[++i], 10); break;
+      case '--concurrency': args.concurrency = parseInt(argv[++i], 10); break;
       case '--target': args.target = argv[++i]; break;
       case '--with': args.with = argv[++i]; break;
       case '--ai': args.ai = true; break;
@@ -313,11 +314,11 @@ if (command === 'crawl' || command === 'sitemap') {
       const result = await crawlSite(startUrl, {
         maxPages: Number.isFinite(args.maxPages) ? args.maxPages : 10,
         maxDepth: Number.isFinite(args.maxDepth) ? args.maxDepth : 2,
-        delayMs: Number.isFinite(args.delay) ? args.delay : 300,
+        delayMs: Number.isFinite(args.delay) ? args.delay : 200,
+        concurrency: Number.isFinite(args.concurrency) ? args.concurrency : 3,
         respectRobots: !args.ignoreRobots,
-        seedUrls,
         timeout: args.timeout ?? 60000,
-        waitAfterLoad: Math.min(args.wait ?? 1500, 5000),
+        waitAfterLoad: Math.min(args.wait ?? 700, 5000),
         logger: args.json ? () => {} : (m) => console.error('[crawl] ' + m),
       });
       if (sitemapInfo) {

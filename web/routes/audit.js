@@ -42,6 +42,7 @@ const crawlSchema = z.object({
   maxPages: z.coerce.number().int().min(1).max(100).optional(),
   maxDepth: z.coerce.number().int().min(0).max(5).optional(),
   delayMs: z.coerce.number().int().min(0).max(60000).optional(),
+  concurrency: z.coerce.number().int().min(1).max(8).optional(),
   respectRobots: z.boolean().optional(),
 });
 
@@ -151,7 +152,8 @@ function createAuditRouter({ repos }) {
     const result = await crawlSite(url, {
       maxPages: body.maxPages ?? 10,
       maxDepth: body.maxDepth ?? 2,
-      delayMs: body.delayMs ?? 300,
+      delayMs: body.delayMs ?? 200,
+      concurrency: body.concurrency ?? 3,
       respectRobots: body.respectRobots !== false,
       timeout: body.timeoutMs ?? 60000,
     });

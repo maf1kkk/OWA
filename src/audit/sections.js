@@ -131,14 +131,20 @@ class SeoSection {
       issues.push(toIssue('seo-img-alt', 'seo-img-alt', 'warning', `${state.imgsNoAlt} изображений без alt`, 'Добавьте осмысленные alt-атрибуты к <img>'));
     }
 
-    // битые внутренние ссылки: проверяем a[href] на 404 через safeFetch
-    const linkHrefs = await session.page.evaluate(() => {
-      return [...document.querySelectorAll('a[href]')]
-        .map((a) => a.getAttribute('href'))
-        .filter((h) => h && !h.startsWith('javascript:') && !h.startsWith('#'))
-        .slice(0, 20)
-        .map((h) => new URL(h, window.location.href).href);
-    });
+    // битые внутренние ссылки: проверяем a[href] на 404 через safeFetch.
+    // При обходе сайта проверку отключаем: внутренние ссылки и так
+    // обходятся, а внешние — это до 20 сетевых запросов на каждую страницу
+    // (главная причина медленного обхода).
+    const checkLinks = !(context.options && context.options.checkLinks === false);
+    const linkHrefs = checkLinks
+      ? await session.page.evaluate(() => {
+        return [...document.querySelectorAll('a[href]')]
+          .map((a) => a.getAttribute('href'))
+          .filter((h) => h && !h.startsWith('javascript:') && !h.startsWith('#'))
+          .slice(0, 20)
+          .map((h) => new URL(h, window.location.href).href);
+      })
+      : [];
     const brokenLinks = [];
     const blockedLinks = [];
     for (const href of linkHrefs) {

@@ -160,3 +160,46 @@ test('aggregate: топ проблем по частоте и худшие ст�
   assert.strictEqual(a.worstPages[0].url, 'https://a.test/1');
   assert.strictEqual(a.avgScore, 55);
 });
+
+test('crawl: обход не зависает — дедлайн и лимит страниц соблюдаются', { timeout: 120000 }, async () => {
+  // Регрессия: воркеры ждали друг друга бесконечно, если очередь пустела
+  // в момент, когда последний воркер уже вышел.
+  const { server, url } = await startSite();
+  try {
+    const t0 = Date.now();
+    const result = await crawlSite(url, {
+      maxPages: 50,
+      maxDepth: 3,
+      delayMs: 0,
+      waitAfterLoad: 200,
+      concurrency: 3,
+      maxDurationMs: 20000,
+      respectRobots: false,
+    });
+    const elapsed = Date.now() - t0;
+    assert.ok(elapsed < 25000, 'обход уложился в дедлайн: ' + elapsed + ' мс');
+    assert.ok(result.pages.length > 0, 'страницы обработаны');
+    assert.ok(result.queued >= 0);
+  } finally {
+    server.close();
+  }
+});
+
+test('crawl: параллельность не теряет страницы (все уровни обойдены)', { timeout: 120000 }, async () => {
+  const { server, url } = await startSite();
+  try {
+    const result = await crawlSite(url, {
+      maxPages: 20,
+      maxDepth: 2,
+      delayMs: 0,
+      waitAfterLoad: 200,
+      concurrency: 4,
+      respectRobots: false,
+    });
+    const urls = result.pages.map((p) => p.url);
+    assert.ok(urls.length >= 4, 'обойдено несколько страниц: ' + urls.length);
+    assert.ok(urls.some((u) => u.endsWith('/about')), 'страница второго уровня найдена');
+  } finally {
+    server.close();
+  }
+});

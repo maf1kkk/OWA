@@ -361,7 +361,10 @@
             <input type="number" id="crawlMaxDepth" value="2" min="0" max="5" step="1">
           </label>
           <label>Пауза между страницами, мс
-            <input type="number" id="crawlDelay" value="300" min="0" max="60000" step="100">
+            <input type="number" id="crawlDelay" value="200" min="0" max="60000" step="100">
+          </label>
+          <label>Параллельных страниц
+            <input type="number" id="crawlConcurrency" value="3" min="1" max="8" step="1">
           </label>
           <label class="check"><input type="checkbox" id="crawlRobots" checked> Соблюдать robots.txt</label>
         </div>
@@ -1111,6 +1114,7 @@ $('crawlForm').addEventListener('submit', async (e) => {
         maxPages: parseInt($('crawlMaxPages').value, 10) || 10,
         maxDepth: parseInt($('crawlMaxDepth').value, 10) || 2,
         delayMs: parseInt($('crawlDelay').value, 10) || 0,
+        concurrency: parseInt($('crawlConcurrency').value, 10) || 3,
         respectRobots: $('crawlRobots').checked,
       }),
     });

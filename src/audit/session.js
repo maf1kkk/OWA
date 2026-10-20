@@ -26,6 +26,10 @@ class AuditSession {
     this.browser = options.browser || null;
     this.timeout = Number.isFinite(options.timeout) ? options.timeout : 60000;
     this.waitAfterLoad = Number.isFinite(options.waitAfterLoad) ? options.waitAfterLoad : 2500;
+    // 'load' — ждём все ресурсы (полные метрики). 'domcontentloaded' — быстрее:
+    // для обхода сайта этого достаточно, а на тяжёлых страницах экономит секунды.
+    this.waitUntil = options.waitUntil || 'load';
+    this.domTimeoutMs = Number.isFinite(options.domTimeoutMs) ? options.domTimeoutMs : 8000;
     this.collected = {};
   }
 
@@ -60,7 +64,13 @@ class AuditSession {
     });
 
     this.page = await this.context.newPage();
-    this.mainResponse = await this.page.goto(this.url, { waitUntil: 'load', timeout: this.timeout });
+    this.mainResponse = await this.page.goto(this.url, { waitUntil: this.waitUntil, timeout: this.timeout });
+    // При waitUntil:'commit' навигация возвращается сразу после ответа
+    // сервера — дальше ограниченно ждём DOM. Так страница с неотвечающим
+    // ресурсом не блокирует обход на полный таймаут.
+    if (this.waitUntil === 'commit') {
+      await this.page.waitForLoadState('domcontentloaded', { timeout: this.domTimeoutMs }).catch(() => {});
+    }
     await this.page.waitForTimeout(this.waitAfterLoad);
     return this;
   }
@@ -163,11 +173,13 @@ class AuditSession {
     }
     try {
       const { safeFetch } = require('../security/safe-fetch');
-      const resp = await safeFetch(base.toString(), { timeout: 5000, maxRedirects: 2 });
+      const resp = await safeFetch(base.toString(), { timeoutMs: 10000, maxRedirects: 2 });
       if (resp.status === 404 || resp.status >= 400) {
         return { exists: false, raw: '', status: resp.status };
       }
-      const text = await resp.text();
+      // safeFetch отдаёт обёртку { status, headers, url, body }, где body —
+      // исходный Response: читать текст нужно через body.text().
+      const text = resp.body ? await resp.body.text() : '';
       return { exists: true, raw: text, status: resp.status };
     } catch {
       return { exists: false, raw: '', error: 'unreachable' };
