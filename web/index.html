@@ -287,6 +287,7 @@
     <a href="#" id="navAudit" data-testid="nav-audit" data-section="section-audit">Аудит</a>
     <a href="#" id="navCrawl" data-testid="nav-crawl" data-section="section-crawl">Обход</a>
     <a href="#" id="navCompare" data-testid="nav-compare" data-section="section-compare">Сравнение</a>
+    <a href="#" id="navScan" data-testid="nav-scan" data-section="section-scan" style="display:none">Сканирование</a>
     <a href="#" id="navHistory" data-testid="nav-history" data-section="section-history">История</a>
     <a href="#" id="navSession" data-testid="nav-session" title="Сводный PDF по всем проверкам за сессию">Отчёт за сессию</a>
   </nav>
@@ -396,6 +397,33 @@
     <div class="spinner" id="compareSpinner"><span class="ring"></span><span>Аудит сайта и конкурентов…</span></div>
     <div class="error" id="compareError"></div>
     <div id="compareResult" data-testid="compare-result"></div>
+  </section>
+
+  <section id="section-scan">
+    <form class="panel" id="scanForm">
+      <div class="row url">
+        <input type="url" id="scanUrl" data-testid="scan-url" placeholder="https://example.com" required spellcheck="false" autocomplete="off">
+        <button class="primary" id="scanBtn" data-testid="scan-run" type="submit">Сканировать</button>
+      </div>
+      <details class="options">
+        <summary>Параметры проверки</summary>
+        <div class="grid">
+          <label class="check" style="grid-column: 1 / -1">
+            <input type="checkbox" id="scanRateLimit">
+            Проверить ограничение частоты запросов (5 запросов подряд — нужна письменная разрешение владельца сайта)
+          </label>
+          <label>Пауза между запросами, мс
+            <input type="number" id="scanDelay" value="250" min="0" max="5000" step="50">
+          </label>
+          <label>Параллельных проверок
+            <input type="number" id="scanConcurrency" value="4" min="1" max="8" step="1">
+          </label>
+        </div>
+      </details>
+    </form>
+    <div class="spinner" id="scanSpinner"><span class="ring"></span><span>Проверяю конфигурацию, защитный периметр и DoS-векторы…</span></div>
+    <div class="error" id="scanError"></div>
+    <div id="scanResult"></div>
   </section>
 
   <section id="section-history">
@@ -681,6 +709,126 @@ function render(url, d, resultId) {
     pdfBtn.style.opacity = '.5';
     pdfBtn.title = 'Отчёт ещё не готов — выполните анализ заново';
   }
+}
+
+/* ================================================================
+   Сканирование на уязвимости и DoS-векторы (локальный модуль).
+   Вкладка появляется только если модуль установлен локально.
+   ================================================================ */
+fetch('/api/scan/status')
+  .then((r) => (r.ok ? r.json() : null))
+  .then((d) => {
+    if (d && d.available) $('navScan').style.display = '';
+  })
+  .catch(() => { /* модуль не установлен — вкладки нет */ });
+
+$('scanForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const url = $('scanUrl').value.trim();
+  if (!url) return;
+  clearError('scan');
+  $('scanResult').innerHTML = '';
+  setBusy('scan', true, 'scanBtn');
+
+  try {
+    const res = await fetch('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        probeRateLimit: $('scanRateLimit').checked,
+        delayMs: parseInt($('scanDelay').value, 10) || 0,
+        concurrency: parseInt($('scanConcurrency').value, 10) || 4,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || ('HTTP ' + res.status));
+    renderScan(data.report);
+  } catch (err) {
+    showError('scan', 'Ошибка сканирования: ' + err.message);
+  } finally {
+    setBusy('scan', false, 'scanBtn');
+  }
+});
+
+function renderScan(report) {
+  const dos = report.dos || {};
+  const edge = dos.edge || { cdn: [], waf: [] };
+  const rl = dos.rateLimit || {};
+  const findings = report.issues || report.findings || [];
+
+  const sevLabels = { critical: 'критично', high: 'высоко', medium: 'средне', low: 'низко', info: 'инфо' };
+  const sevClass = { critical: 'bad', high: 'bad', medium: 'warn', low: 'warn', info: 'info' };
+
+  let rlText = 'не проверялось';
+  if (rl.probed) {
+    if (rl.limitSeen) rlText = 'работает: сервер отвечает 429 (Retry-After: ' + (rl.retryAfter || '—') + ')';
+    else if (rl.headerOnly) rlText = 'заголовки лимита есть, 429 не сработал за ' + rl.requests + ' запросов';
+    else rlText = 'не обнаружен: ' + rl.requests + ' запросов подряд без 429';
+  }
+
+  const cards = Object.entries(report.counts || {}).map(([sev, count]) =>
+    '<div class="mcard" data-testid="scan-card-' + esc(sev) + '">'
+    + '<div class="name">' + esc(sevLabels[sev] || sev) + '</div>'
+    + '<div class="val ' + (sev === 'critical' || sev === 'high' ? 'bad' : sev === 'info' ? 'good' : 'warn') + '">' + esc(count) + '</div>'
+    + '</div>').join('');
+
+  const vectorRows = (dos.vectors || []).map((v) =>
+    '<tr><td><span class="v ' + (sevClass[v.severity] || 'info') + '">' + esc(sevLabels[v.severity] || v.severity) + '</span></td>'
+    + '<td class="sel">' + esc(v.path) + '</td>'
+    + '<td>' + esc(v.desc) + '</td>'
+    + '<td class="sel" style="font-size:11px">' + esc(v.evidence || '') + '</td></tr>').join('');
+
+  const findingRows = findings.map((f) =>
+    '<tr><td><span class="v ' + (sevClass[f.severity] || 'info') + '">' + esc(sevLabels[f.severity] || f.severity) + '</span></td>'
+    + '<td class="sel">' + esc(f.path) + '</td>'
+    + '<td>' + esc(f.desc) + '</td>'
+    + '<td class="sel" style="font-size:11px">' + esc(f.evidence || '') + '</td></tr>').join('');
+
+  const html = '<div class="actions">'
+    + '<button class="ghost" id="scanPdf">Скачать PDF-отчёт</button>'
+    + '<button class="ghost" id="scanJson">Скачать JSON</button>'
+    + '</div>'
+    + '<div class="cards">' + cards + '</div>'
+    + '<div class="card"><h2>Защитный периметр от нагрузки</h2><table>'
+    + '<tr><th style="width:32%">Параметр</th><th>Значение</th></tr>'
+    + '<tr><td>CDN</td><td>' + (edge.cdn && edge.cdn.length ? edge.cdn.map((c) => esc(c.name) + ' <span class="sel">(' + esc(c.header) + ')</span>').join(', ') : 'не обнаружен') + '</td></tr>'
+    + '<tr><td>WAF</td><td>' + (edge.waf && edge.waf.length ? edge.waf.map((c) => esc(c.name) + ' <span class="sel">(' + esc(c.header) + ')</span>').join(', ') : 'не обнаружен') + '</td></tr>'
+    + '<tr><td>Ограничение частоты запросов</td><td>' + esc(rlText) + '</td></tr>'
+    + (dos.jsonp && dos.jsonp.reflected ? '<tr><td>JSONP-отражение</td><td>параметр отражается в теле ответа — возможен рефлекторный вектор</td></tr>' : '')
+    + '</table></div>'
+    + ((dos.vectors || []).length ? '<div class="card"><h2>Векторы DoS</h2><table>'
+      + '<tr><th>Уровень</th><th>Путь</th><th>Что это значит</th><th>Свидетельство</th></tr>'
+      + vectorRows + '</table></div>' : '')
+    + '<div class="card"><h2>Найденные проблемы (' + findings.length + ')</h2><table>'
+    + '<tr><th>Уровень</th><th>Путь</th><th>Что не так</th><th>Свидетельство</th></tr>'
+    + (findingRows || '<tr><td colspan="4">Проблем не найдено</td></tr>') + '</table></div>';
+
+  $('scanResult').innerHTML = html;
+
+  $('scanJson').addEventListener('click', () => downloadJson('owa-scan.json', report));
+  $('scanPdf').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.textContent = 'Готовлю PDF…';
+    try {
+      const res = await fetch('/api/scan/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: report.url, probeRateLimit: $('scanRateLimit').checked }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'owa-scan.pdf';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      showError('scan', 'Не удалось собрать PDF: ' + err.message);
+    } finally {
+      btn.textContent = 'Скачать PDF-отчёт';
+    }
+  });
 }
 
 /* ---------- История ---------- */

@@ -80,6 +80,16 @@ function createApp({ db, auth, env = process.env }) {
   app.use(createCodeAnalysisRouter({ repos }));
   app.use(createAiRouter({ repos }));
 
+  // Локальный модуль сканирования (DoS-векторы, уязвимости) — «премиальная»
+  // часть, в публичный репозиторий не попадает. Если модуля нет — вкладка
+  // в интерфейсе просто не появляется, приложение работает как обычно.
+  try {
+    const { createScanRouter } = require('../local/scan-router');
+    app.use(createScanRouter({ repos }));
+  } catch (err) {
+    // модуль не установлен — это штатная ситуация
+  }
+
   // UI (существующий одностраничник)
   app.get('/', (_req, res) => {
     res.type('html').sendFile(INDEX_HTML);
