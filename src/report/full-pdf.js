@@ -217,13 +217,29 @@ function findingsBlock(facts) {
 }
 
 /**
+ * Брендинг отчёта: кто заказчик, кто исполнитель, контакты.
+ * По умолчанию — инструмент (OWA). Для клиентской отправки лучше свои данные.
+ */
+function defaultBranding(facts) {
+  return {
+    title: 'Комплексный аудит сайта',
+    client: '',
+    executor: 'OWA · One-Click Web Analyzer',
+    contacts: '',
+    footerLeft: 'OWA — комплексный аудит сайта',
+  };
+}
+
+/**
  * Собрать HTML полного отчёта.
  * @param {object} args
  * @param {object} args.facts — факт-лист (buildFullFacts)
  * @param {object} args.narrative — текст (резюме + план)
+ * @param {object} [args.branding] — брендинг
  */
 function buildFullHtml(args) {
   const { facts, narrative } = args;
+  const b = Object.assign(defaultBranding(facts), args.branding || {});
   const template = fs.readFileSync(path.join(TEMPLATES_DIR, 'full.html'), 'utf8');
   const styles = fs.readFileSync(path.join(TEMPLATES_DIR, 'styles.css'), 'utf8');
 
@@ -253,6 +269,12 @@ function buildFullHtml(args) {
 
   return template
     .replace('__STYLES__', styles)
+    .replace('__REPORT_TITLE__', esc(b.title))
+    .replaceAll('__REPORT_TITLE__', esc(b.title))
+    .replace('__CLIENT_LINE__', b.client ? '<div class="date">Заказчик: ' + esc(b.client) + '</div>' : '')
+    .replace('__EXECUTOR_LINE__', b.executor
+      ? '<div class="date" style="margin-top:6px">Подготовил: ' + esc(b.executor) + (b.contacts ? ' · ' + esc(b.contacts) : '') + '</div>'
+      : '')
     .replace('__URL__', esc(facts.url))
     .replace('__URL_SHORT__', esc(String(facts.url).replace(/^https?:\/\//, '').slice(0, 50)))
     .replace('__DATE_LONG__', esc(fmtDate(facts.date)))
@@ -274,7 +296,9 @@ function buildFullHtml(args) {
     .replace('__COMPARE_TABLE__', compareTable(facts))
     .replace('__COMPARE_CHART__', args.charts && args.charts.compare ? args.charts.compare : '')
     .replace('__FINDINGS__', findingsBlock(facts))
-    .replace('__LIMITATIONS__', limitations);
+    .replace('__LIMITATIONS__', limitations)
+    .replace('__FOOTER_LEFT__', esc(b.footerLeft))
+    .replace('__FOOTER_RIGHT__', esc(b.contacts || facts.url));
 }
 
 /**

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>__REPORT_TITLE__</title>
+<style>__STYLES__</style>
+</head>
+<body>
+  <div class="cover" style="padding-top:20px">
+    <div class="brand">__REPORT_TITLE__</div>
+    <h1 class="compare-title" style="font-size:19pt;margin-top:10px">__URL__</h1>
+    <div class="date">Дата: __DATE_LONG__ · страниц проверено: __PAGE_COUNT__</div>
+    __CLIENT_LINE__
+    __EXECUTOR_LINE__
+
+    <div class="score-hero" style="justify-content:center; margin-top:20px">
+      <div class="big __SCORE_CLASS__">__INTEGRAL_SCORE__</div>
+      <div class="meta"><b>Интегральная оценка</b><div style="margin-top:4px">__SCORE_LEGEND__</div></div>
+    </div>
+
+    <div class="section-scores">
+      __SECTION_CARDS__
+    </div>
+  </div>
+
+  <h2>Главное, что нашлось</h2>
+  <ul style="margin:0 0 12px 18px">
+    __FOCUS__
+  </ul>
+
+  <h2>Ключевые цифры</h2>
+  <table class="vitals-table">
+    <tr><th style="width:16px"></th><th>Метрика</th><th style="text-align:right">Значение</th><th>Порог Good</th><th>Порог Poor</th><th>Оценка</th></tr>
+    __VITALS_ROWS__
+  </table>
+
+  <h2>Сравнение с конкурентами</h2>
+  __COMPARE_TABLE__
+
+  <h2>Приоритеты на 3 месяца</h2>
+  <table>
+    <tr><th style="width:60px">Месяц</th><th>Что сделать</th><th>Зачем</th><th style="width:60px">Трудоёмкость</th></tr>
+    __PLAN_ROWS__
+  </table>
+
+  <h2>Что дальше</h2>
+  <p>__NEXT_STEP__</p>
+
+  <div class="disclaimer">
+    Все числа в документе — результат фактических измерений в headless Chromium
+    (Performance API, axe-core, обход сайта). Оценки отражают состояние сайта на момент
+    проверки и носят рекомендательный характер.
+  </div>
+
+  <div class="footer">
+    <span>__FOOTER_LEFT__</span>
+    <span>__FOOTER_RIGHT__</span>
+  </div>
+</body>
+</html>
