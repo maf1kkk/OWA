@@ -168,10 +168,12 @@ class AuditOrchestrator {
       integralScore = Math.round(weighted / weightSum);
     }
 
-    const issues = Object.values(sectionResults)
-      .filter((r) => r.status === 'ok')
-      .flatMap((r) => r.issues || [])
-      .map((i) => ({ ...i }));
+    // Все issues по всем успешным секциям. Раздел привязывается к каждой
+    // находке: без этого потеряется информация, к какой секции проблема
+    // относится (в частности — в сводном отчёте за сессию).
+    const issues = Object.entries(sectionResults)
+      .filter(([, r]) => r.status === 'ok')
+      .flatMap(([name, r]) => (r.issues || []).map((i) => ({ ...i, section: name })));
 
     const failedSections = Object.entries(sectionResults)
       .filter(([, r]) => r.status !== 'ok')

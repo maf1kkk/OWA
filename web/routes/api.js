@@ -134,6 +134,20 @@ function createApiRouter({ repos }) {
       });
       const compact = body.compact === true ? buildCompact(data) : undefined;
 
+      // Результат анализа кладём в лог сессии: чтобы «Скачать PDF» отдавал
+      // отчёт по этому замеру, а «Отчёт за сессию» — сводку по всем.
+      const session = require('../../src/web/session');
+      const resultId = session.put('analysis', data, {
+        url,
+        score: data.interpretation ? data.interpretation.summary.score : null,
+        issueCount: data.interpretation ? data.interpretation.findings.length : 0,
+        issues: (data.interpretation ? data.interpretation.findings : []).map((f) => ({
+          rule: f.id,
+          section: 'performance',
+          severity: f.verdict === 'bad' ? 'critical' : f.verdict === 'warn' ? 'warning' : 'info',
+        })),
+      });
+
       let analysisId = null;
       if (save) {
         analysisId = repos.analyses.insert({
@@ -147,7 +161,7 @@ function createApiRouter({ repos }) {
         });
       }
 
-      return res.json({ ok: true, report: data, compact, analysisId });
+      return res.json({ ok: true, report: data, compact, analysisId, resultId });
     } catch (err) {
       const message = 'Анализ не удался';
       if (save) {

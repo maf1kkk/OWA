@@ -473,3 +473,89 @@ test('UI: страница содержит разделы аудита, обх�
     await ctx.stop();
   }
 });
+
+// ------------------------------------------- PDF-отчёты и лог сессии
+
+test('GET /api/session: пустой лог -> ok со списком операций', async () => {
+  const ctx = await startApp();
+  try {
+    const body = await (await fetch(`${ctx.base}/api/session`)).json();
+    assert.strictEqual(body.ok, true);
+    assert.ok(Array.isArray(body.operations));
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('GET /api/report/pdf: без id -> 400 BAD_REQUEST', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/report/pdf?type=audit`);
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual((await r.json()).error, 'BAD_REQUEST');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('GET /api/report/pdf: неизвестный id -> 404 NOT_FOUND', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/report/pdf?type=audit&id=missing`);
+    assert.strictEqual(r.status, 404);
+    assert.strictEqual((await r.json()).error, 'NOT_FOUND');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('GET /api/report/pdf: неверный type -> 400 VALIDATION', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/report/pdf?type=bogus&id=x`);
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual((await r.json()).error, 'VALIDATION');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('GET /api/report/pdf?type=session: без операций -> 404', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/report/pdf?type=session`);
+    assert.strictEqual(r.status, 404);
+    assert.strictEqual((await r.json()).error, 'NOT_FOUND');
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('GET /api/history/:id/pdf: несуществующий анализ -> 404', async () => {
+  const ctx = await startApp();
+  try {
+    const r = await fetch(`${ctx.base}/api/history/999999/pdf`);
+    assert.strictEqual(r.status, 404);
+  } finally {
+    await ctx.stop();
+  }
+});
+
+test('лог сессии: операция попадает в лог со сводкой', async () => {
+  const session = require('../src/web/session');
+  session.clear();
+  const id = session.put('audit', { url: 'https://x.test/', scores: {} }, {
+    url: 'https://x.test/',
+    score: 72,
+    issueCount: 1,
+    issues: [{ rule: 'seo-no-title', section: 'seo', severity: 'critical' }],
+  });
+  const ops = session.listOperations();
+  assert.strictEqual(ops.length, 1);
+  assert.strictEqual(ops[0].type, 'audit');
+  assert.strictEqual(ops[0].score, 72);
+  assert.strictEqual(ops[0].issueCount, 1);
+  assert.strictEqual(ops[0].issues[0].section, 'seo');
+  assert.ok(session.get(id), 'результат доступен по id');
+  session.clear();
+});

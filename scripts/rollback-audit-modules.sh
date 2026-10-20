@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================
-#  OWA - откат модулей 0-5 + веб-UI + AI-слой (RAG) без Git
+#  OWA - откат модулей 0-5 + веб-UI + AI-слой + PDF-отчёты без Git
 #
 #  Восстанавливает изменённые файлы из .rollback-backup/original
 #  и удаляет добавленные модули. Работает без доступа к Git.
@@ -19,7 +19,8 @@ echo "[1/2] Восстанавливаю изменённые файлы..."
 for f in .env.example .github/workflows/test.yml .gitignore CHANGELOG.md README.md \
          bin/owa.js mcp/server.js package-lock.json package.json scripts/check-env.js \
          src/ai/client.js src/ai/providers/index.js src/ai/providers/openai-compatible.js \
-         test/ai.test.js test/code-session.test.js web/app.js web/routes/api.js; do
+         src/core/orchestrator.js test/ai.test.js test/code-session.test.js \
+         web/app.js web/index.html web/routes/api.js web/routes/audit.js; do
   if [ -f ".rollback-backup/original/$f" ]; then
     cp ".rollback-backup/original/$f" "$f"
     echo "  + $f"
@@ -27,8 +28,8 @@ for f in .env.example .github/workflows/test.yml .gitignore CHANGELOG.md README.
 done
 
 echo "[2/2] Удаляю добавленные модули..."
-for d in clients src/ai/knowledge src/audit src/crawl src/compare src/core src/report \
-         src/security templates; do
+for d in clients src/ai/knowledge src/audit src/crawl src/compare src/core src/security \
+         src/web templates; do
   if [ -d "$d" ]; then
     rm -rf "$d"
     echo "  - $d"
@@ -36,8 +37,10 @@ for d in clients src/ai/knowledge src/audit src/crawl src/compare src/core src/r
 done
 
 for f in src/ai/client-profile.js src/ai/rag.js src/ai/report-generator.js \
-         web/routes/audit.js test/ai-report.test.js test/audit.test.js \
-         test/crawl.test.js test/compare.test.js test/orchestrator.test.js \
+         src/report/analysis-pdf.js src/report/compare-pdf.js src/report/crawl-pdf.js \
+         src/report/pdf.js src/report/render.js src/report/session-pdf.js \
+         test/ai-report.test.js test/audit.test.js test/crawl.test.js \
+         test/compare.test.js test/orchestrator.test.js test/pdf-layout.test.js \
          test/pdf.test.js test/ssrf.test.js; do
   if [ -f "$f" ]; then
     rm -f "$f"

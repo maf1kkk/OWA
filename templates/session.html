@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>OWA — Сводный отчёт за сессию</title>
+<style>__STYLES__</style>
+</head>
+<body>
+  <div class="cover">
+    <div class="brand">OWA · One-Click Web Analyzer</div>
+    <h1 class="compare-title">Сводный отчёт за сессию</h1>
+    <div class="date">Дата: __DATE_LONG__ · операций: __OP_COUNT__</div>
+
+    <div class="section-scores">
+      __SUMMARY_CARDS__
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>Что делалось за сессию</h2>
+  <table>
+    <tr><th>Время</th><th>Тип</th><th>URL</th><th style="text-align:right">Оценка</th><th style="text-align:right">Проблем</th></tr>
+    __OPS_ROWS__
+  </table>
+
+  <h2>Сайты, которые проверяли</h2>
+  <table>
+    <tr><th>URL</th><th style="text-align:right">Проверок</th><th style="text-align:right">Средняя оценка</th><th>Последний результат</th></tr>
+    __SITES_ROWS__
+  </table>
+
+  <h2>Сводка проблем по разделам</h2>
+  <div class="chart">
+    <img src="__ISSUES_CHART__" alt="Проблемы по разделам">
+    <div class="caption">Количество проблем по разделам за всю сессию</div>
+  </div>
+
+  <h2>Топ проблем за сессию</h2>
+  <table>
+    <tr><th>Правило</th><th>Раздел</th><th>Уровень</th><th style="text-align:right">Встреч</th></tr>
+    __TOP_ISSUES__
+  </table>
+
+  <div class="disclaimer">
+    Сводный отчёт объединяет все проверки, выполненные в текущей сессии
+    (анализ производительности, комплексные аудиты, обходы сайтов, сравнения).
+    Каждая проверка выполнена в headless Chromium; оценки отражают состояние
+    сайтов на момент замера и носят рекомендательный характер.
+  </div>
+
+  <div class="footer">
+    <span>OWA — сводный отчёт за сессию</span>
+    <span>__DATE_SHORT__</span>
+  </div>
+</body>
+</html>

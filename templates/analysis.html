@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>OWA — Отчёт по анализу</title>
+<style>__STYLES__</style>
+</head>
+<body>
+  <div class="cover">
+    <div class="brand">OWA · One-Click Web Analyzer</div>
+    <h1 class="compare-title">Отчёт по производительности</h1>
+    <div class="url">__URL__</div>
+    <div class="date">Дата: __DATE_LONG__</div>
+
+    <div class="score-hero" style="justify-content:center">
+      <div class="big __SCORE_CLASS__">__SCORE__</div>
+      <div class="meta"><b>__HEADLINE__</b><div style="margin-top:4px">__SCORE_LEGEND__</div></div>
+    </div>
+
+    <div class="section-scores">
+      __METRIC_CARDS__
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>Ключевые метрики</h2>
+  <table class="vitals-table">
+    <tr><th style="width:16px"></th><th>Метрика</th><th style="text-align:right">Значение</th><th>Порог Good</th><th>Порог Poor</th><th>Оценка</th></tr>
+    __VITALS_ROWS__
+  </table>
+
+  <h2>Фазы навигации</h2>
+  <table>
+    <tr><th>Фаза</th><th style="text-align:right">Время</th></tr>
+    __NAV_ROWS__
+  </table>
+
+  <h2>Ресурсы по типам</h2>
+  <table>
+    <tr><th>Тип</th><th style="text-align:right">Кол-во</th><th style="text-align:right">Объём</th><th style="text-align:right">Среднее время</th></tr>
+    __RESOURCE_ROWS__
+  </table>
+
+  <h2>Топ-10 самых медленных ресурсов</h2>
+  <table>
+    <tr><th>Ресурс</th><th>Тип</th><th style="text-align:right">Время, мс</th><th style="text-align:right">Размер</th></tr>
+    __SLOW_ROWS__
+  </table>
+
+  <div class="chart">
+    <img src="__WATERFALL_CHART__" alt="Водопад загрузки ресурсов">
+    <div class="caption">Водопад загрузки: горизонталь — время загрузки ресурса, цвет — тип</div>
+  </div>
+
+  <h2>Long Tasks</h2>
+  <table>
+    <tr><th>Показатель</th><th style="text-align:right">Значение</th></tr>
+    __LONG_TASK_ROWS__
+  </table>
+
+  <h2>Найденные проблемы</h2>
+  __FINDINGS__
+
+  <div class="disclaimer">
+    Отчёт сформирован автоматически инструментом OWA на основе фактических измерений
+    в headless Chromium (Performance API). Оценки отражают состояние сайта на момент
+    замера и носят рекомендательный характер.
+  </div>
+
+  <div class="footer">
+    <span>OWA — отчёт по производительности</span>
+    <span>__URL_SHORT__ · __DATE_SHORT__</span>
+  </div>
+</body>
+</html>

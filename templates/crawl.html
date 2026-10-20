@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>OWA — Отчёт по обходу сайта</title>
+<style>__STYLES__</style>
+</head>
+<body>
+  <div class="cover">
+    <div class="brand">OWA · One-Click Web Analyzer</div>
+    <h1 class="compare-title">Отчёт по обходу сайта</h1>
+    <div class="url">__START_URL__</div>
+    <div class="date">Дата: __DATE_LONG__ · обработано страниц: __PAGE_COUNT__</div>
+
+    <div class="section-scores">
+      __AGG_CARDS__
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>Средние метрики по сайту</h2>
+  <table class="vitals-table">
+    <tr><th style="width:16px"></th><th>Метрика</th><th style="text-align:right">Среднее</th><th>Порог Good</th><th>Порог Poor</th><th>Оценка</th></tr>
+    __AVG_ROWS__
+  </table>
+
+  <h2>Топ проблем по частоте</h2>
+  <table>
+    <tr><th>Правило</th><th>Уровень</th><th style="text-align:right">Страниц затронуто</th><th>Где встречается</th></tr>
+    __TOP_ISSUES__
+  </table>
+
+  <div class="page-break"></div>
+
+  <h2>Страницы: __PAGE_COUNT__ шт</h2>
+  <table>
+    <tr><th>URL</th><th style="text-align:right">Оценка</th><th style="text-align:right">Perf</th><th style="text-align:right">SEO</th><th style="text-align:right">A11y</th><th style="text-align:right">Проблем</th></tr>
+    __PAGE_ROWS__
+  </table>
+
+  <h2>Страницы с худшими показателями</h2>
+  <table>
+    <tr><th>URL</th><th style="text-align:right">Оценка</th></tr>
+    __WORST_ROWS__
+  </table>
+
+  <div class="disclaimer">
+    Отчёт сформирован автоматически инструментом OWA: обход внутренних ссылок с
+    ограничением домена и глубины, учётом robots.txt. Каждая страница проверена
+    облегчённым аудитом (Performance, SEO, Accessibility).
+  </div>
+
+  <div class="footer">
+    <span>OWA — отчёт по обходу сайта</span>
+    <span>__DATE_SHORT__</span>
+  </div>
+</body>
+</html>

@@ -264,12 +264,15 @@
 
   @media print {
     body { background: #fff !important; color: #000 !important; }
-    header, footer, form.panel, .spinner, .error, .actions, .toolbar, button { display: none !important; }
+    header, footer, form.panel, .spinner, .error, .actions, .toolbar, button, .nav-print-hide { display: none !important; }
     .card { border: none; background: #fff !important; box-shadow: none !important; }
     table { border: 1px solid #000; }
     th, td { border: 1px solid #000; padding: 4px 8px; }
     .v { border: none !important; padding: 0 !important; }
-    section { display: block !important; }
+    /* Печатается ТОЛЬКО активная вкладка: раньше печатались все секции разом
+       (анализ + аудит + обход + сравнение + история) — получался каша-отчёт. */
+    section { display: none !important; }
+    section.active { display: block !important; }
     .canvas-wrap { display: none !important; }
   }
 </style>
@@ -285,6 +288,7 @@
     <a href="#" id="navCrawl" data-section="section-crawl">Обход</a>
     <a href="#" id="navCompare" data-section="section-compare">Сравнение</a>
     <a href="#" id="navHistory" data-section="section-history">История</a>
+    <a href="#" id="navSession" title="Сводный PDF по всем проверкам за сессию">Отчёт за сессию</a>
   </nav>
   <span class="status" id="health"><span class="dot"></span>ready</span>
 </header>
@@ -441,10 +445,35 @@ function showSection(id) {
 document.querySelectorAll('header nav a').forEach((a) => {
   a.addEventListener('click', (e) => {
     e.preventDefault();
+    // «Отчёт за сессию» — не вкладка, а выгрузка сводного PDF.
+    if (a.id === 'navSession') return;
     const target = a.getAttribute('data-section');
     showSection(target);
     if (a.id === 'navHistory') loadHistory();
   });
+});
+
+$('navSession').addEventListener('click', async (e) => {
+  e.preventDefault();
+  const link = e.currentTarget;
+  link.textContent = 'Готовлю…';
+  try {
+    const res = await fetch('/api/report/pdf?type=session');
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || 'HTTP ' + res.status);
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'owa-session-report.pdf';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (err) {
+    showError('analyze', 'Отчёт за сессию: ' + err.message);
+  } finally {
+    link.textContent = 'Отчёт за сессию';
+  }
 });
 
 fetch('/api/health').then(r => r.json()).then(d => {
@@ -489,7 +518,7 @@ $('form').addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.message || data.error || ('HTTP ' + res.status));
-    render(url, data.report);
+    render(url, data.report, data.resultId);
   } catch (err) {
     const el = $('error');
     el.textContent = 'Ошибка: ' + err.message;
@@ -506,7 +535,7 @@ function verdictBadge(v) {
   return `<span class="v ${esc(v)}">${map[v] || esc(v)}</span>`;
 }
 
-function render(url, d) {
+function render(url, d, resultId) {
   const m = d.metrics;
   const s = d.interpretation.summary;
   const vc = s.status === 'good' ? 'good' : s.status;
@@ -516,7 +545,8 @@ function render(url, d) {
     <button class="ghost" id="btnJson">Показать JSON (для ИИ)</button>
     <button class="ghost" id="btnCopy">Скопировать компактный JSON</button>
     <button class="ghost" id="btnDownload">Скачать отчёт .json</button>
-    <button class="ghost" id="btnPrint">PDF (печать)</button>
+    <a class="ghost" id="btnPdf" href="#" download>Скачать PDF-отчёт</a>
+    <button class="ghost" id="btnPrint">Печать экрана</button>
   </div>
 
   <div class="card">
@@ -637,6 +667,17 @@ function render(url, d) {
     URL.revokeObjectURL(a.href);
   });
   $('btnPrint').addEventListener('click', () => window.print());
+  // PDF по конкретному замеру: отчёт строится на сервере из готового
+  // результата, повторный анализ не запускается.
+  const pdfBtn = $('btnPdf');
+  if (resultId) {
+    pdfBtn.href = '/api/report/pdf?type=analysis&id=' + encodeURIComponent(resultId);
+    pdfBtn.download = 'owa-analysis-' + url.replace(/^https?:\/\//, '').replace(/[^\w.-]+/g, '_') + '.pdf';
+  } else {
+    pdfBtn.removeAttribute('href');
+    pdfBtn.style.opacity = '.5';
+    pdfBtn.title = 'Отчёт ещё не готов — выполните анализ заново';
+  }
 }
 
 /* ---------- История ---------- */
@@ -686,6 +727,7 @@ async function loadHistory() {
           <td class="num">${it.durationMs !== null ? it.durationMs + ' мс' : '—'}</td>
           <td class="act">
             <button class="ghost" data-act="report" data-id="${it.id}">Отчёт</button>
+            <a class="ghost" data-act="pdf" href="/api/history/${it.id}/pdf" download>PDF</a>
             <button class="ghost" data-act="graph" data-url="${esc(it.url)}">Графики</button>
           </td>
         </tr>`;
@@ -1074,7 +1116,7 @@ $('crawlForm').addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.message || data.error || ('HTTP ' + res.status));
-    renderCrawl(data.report);
+    renderCrawl(data.report, data.resultId);
   } catch (err) {
     showError('crawl', 'Ошибка обхода: ' + err.message);
   } finally {
@@ -1082,7 +1124,7 @@ $('crawlForm').addEventListener('submit', async (e) => {
   }
 });
 
-function renderCrawl(report) {
+function renderCrawl(report, resultId) {
   const a = report.aggregate || {};
   const pages = report.pages || [];
   const kb = (v) => (v === null || v === undefined ? '—' : v);
@@ -1114,7 +1156,9 @@ function renderCrawl(report) {
       + '<td class="sel" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc((issue.pages || []).join(', ')) + '</td></tr>';
   }
 
-  $('crawlResult').innerHTML = '<div class="actions"><button class="ghost" id="crawlJson">Скачать JSON</button></div>'
+  $('crawlResult').innerHTML = '<div class="actions">'
+    + '<a class="ghost" id="crawlPdf" href="#" download>Скачать PDF-отчёта</a>'
+    + '<button class="ghost" id="crawlJson">Скачать JSON</button></div>'
     + cards
     + '<div class="card"><h2>Страницы (' + pages.length + ')</h2><table>'
     + '<tr><th>URL</th><th style="text-align:right">Оценка</th><th style="text-align:right">Perf</th><th style="text-align:right">SEO</th><th style="text-align:right">A11y</th><th style="text-align:right">Проблем</th></tr>'
@@ -1123,6 +1167,14 @@ function renderCrawl(report) {
       + '<tr><th>Правило</th><th>Уровень</th><th style="text-align:right">Страниц</th><th>Где</th></tr>'
       + topIssues + '</table></div>' : '');
 
+  const crawlPdf = $('crawlPdf');
+  if (resultId) {
+    crawlPdf.href = '/api/report/pdf?type=crawl&id=' + encodeURIComponent(resultId);
+    crawlPdf.download = 'owa-crawl-' + (report.startUrl || '').replace(/^https?:\/\//, '').replace(/[^\w.-]+/g, '_') + '.pdf';
+  } else {
+    crawlPdf.removeAttribute('href');
+    crawlPdf.style.opacity = '.5';
+  }
   $('crawlJson').addEventListener('click', () => downloadJson('owa-crawl.json', report));
 }
 

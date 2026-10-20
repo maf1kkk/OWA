@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================
-REM  OWA - откат модулей 0-5 + веб-UI + AI-слой (RAG) без Git
+REM  OWA - откат модулей 0-5 + веб-UI + AI-слой + PDF-отчёты без Git
 REM
 REM  Восстанавливает изменённые файлы из .rollback-backup\original
 REM  и удаляет добавленные модули. Работает без доступа к Git.
@@ -31,10 +31,13 @@ for %%F in (
   src\ai\client.js
   src\ai\providers\index.js
   src\ai\providers\openai-compatible.js
+  src\core\orchestrator.js
   test\ai.test.js
   test\code-session.test.js
   web\app.js
+  web\index.html
   web\routes\api.js
+  web\routes\audit.js
 ) do (
   if exist ".rollback-backup\original\%%F" (
     copy /Y ".rollback-backup\original\%%F" "%%F" >nul && echo   + %%F
@@ -49,8 +52,8 @@ for %%D in (
   src\crawl
   src\compare
   src\core
-  src\report
   src\security
+  src\web
   templates
 ) do (
   if exist "%%D" (
@@ -62,12 +65,18 @@ for %%F in (
   src\ai\client-profile.js
   src\ai\rag.js
   src\ai\report-generator.js
-  web\routes\audit.js
+  src\report\analysis-pdf.js
+  src\report\compare-pdf.js
+  src\report\crawl-pdf.js
+  src\report\pdf.js
+  src\report\render.js
+  src\report\session-pdf.js
   test\ai-report.test.js
   test\audit.test.js
   test\crawl.test.js
   test\compare.test.js
   test\orchestrator.test.js
+  test\pdf-layout.test.js
   test\pdf.test.js
   test\ssrf.test.js
 ) do (

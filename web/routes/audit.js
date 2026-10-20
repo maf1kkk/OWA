@@ -4,10 +4,11 @@
  *   POST /api/audit      полный аудит (5 секций) -> JSON
  *   POST /api/crawl      обход сайта -> JSON (агрегаты по сайту)
  *   POST /api/compare    сравнение с конкурентами -> JSON
- *   GET  /api/report/pdf?type=audit|crawl|compare&id=<id>  -> PDF
+ *   GET  /api/report/pdf?type=analysis|audit|crawl|compare|session[&id=<id>]
+ *   GET  /api/session    лог операций текущей сессии
  *
- * Результаты кладутся в короткоживущий кэш: PDF строится по уже готовому
- * отчёту, без повторного запуска Chromium.
+ * Результаты кладутся в лог сессии (src/web/session.js): PDF строится по
+ * уже готовому отчёту, без повторного запуска Chromium.
  */
 'use strict';
 
@@ -18,25 +19,16 @@ const { crawlSite } = require('../../src/crawl/crawler');
 const { compareSites } = require('../../src/compare');
 const { generatePdfReport } = require('../../src/report/pdf');
 const { generateComparePdf } = require('../../src/report/compare-pdf');
-const { HttpError, validateBody, validateQuery } = require('../middleware/validate');
+const { generateAnalysisPdf } = require('../../src/report/analysis-pdf');
+const { generateCrawlPdf } = require('../../src/report/crawl-pdf');
+const { generateSessionPdf } = require('../../src/report/session-pdf');
+const { renderPdf } = require('../../src/report/render');
+const session = require('../../src/web/session');
+const { HttpError, validateBody, validateQuery, validateParams } = require('../middleware/validate');
 
-/** Кэш готовых отчётов: id -> { type, result, createdAt }. TTL 30 минут. */
-const CACHE_TTL_MS = 30 * 60 * 1000;
-const CACHE_MAX = 20;
-const cache = new Map();
-
-function cachePut(type, result) {
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  cache.set(id, { type, result, createdAt: Date.now() });
-  // Чистим протухшее и ограничиваем размер.
-  for (const [key, entry] of cache) {
-    if (Date.now() - entry.createdAt > CACHE_TTL_MS) cache.delete(key);
-  }
-  while (cache.size > CACHE_MAX) {
-    cache.delete(cache.keys().next().value);
-  }
-  return id;
-}
+const idParamSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
 
 const auditSchema = z.object({
   url: z.string().min(1, 'URL обязателен'),
@@ -61,8 +53,8 @@ const compareSchema = z.object({
 });
 
 const pdfQuerySchema = z.object({
-  type: z.enum(['audit', 'compare']),
-  id: z.string().min(1),
+  type: z.enum(['analysis', 'audit', 'crawl', 'compare', 'session']),
+  id: z.string().min(1).optional(),
 });
 
 /** Урезанная версия аудита для хранения в истории (без тяжёлого raw). */
@@ -73,7 +65,6 @@ function slimAudit(result) {
     url: result.url,
     timestamp: result.timestamp,
     integralScore: result.integralScore,
-    // Метрики производительности нужны для таблицы Core Web Vitals в PDF.
     metrics: perf && perf.raw && perf.raw.metrics ? perf.raw.metrics : {},
     scores: Object.fromEntries(
       Object.entries(result.scores).map(([name, sec]) => [
@@ -90,6 +81,7 @@ function slimAudit(result) {
             message: i.message,
             recommendation: i.recommendation ?? null,
             location: i.location ?? null,
+            section: name,
           })),
         },
       ])
@@ -97,6 +89,15 @@ function slimAudit(result) {
     issues: result.issues || [],
     failedSections: result.failedSections || [],
   };
+}
+
+/** Имя файла для выгрузки. */
+function fileName(type, url) {
+  const host = String(url || 'report')
+    .replace(/^https?:\/\//i, '')
+    .replace(/[^\w.-]+/g, '_')
+    .slice(0, 60) || 'report';
+  return `owa-${type}-${host}.pdf`;
 }
 
 function createAuditRouter({ repos }) {
@@ -113,9 +114,17 @@ function createAuditRouter({ repos }) {
     });
 
     const slim = slimAudit(result);
-    const id = cachePut('audit', slim);
+    const id = session.put('audit', slim, {
+      url,
+      score: result.integralScore,
+      issueCount: (result.issues || []).length,
+      issues: (result.issues || []).map((i) => ({
+        rule: i.rule || i.id,
+        section: i.section || '—',
+        severity: i.severity,
+      })),
+    });
 
-    // Сохраняем в историю: чтобы результат не потерялся.
     let analysisId = null;
     try {
       const perf = result.scores.performance;
@@ -147,7 +156,18 @@ function createAuditRouter({ repos }) {
       timeout: body.timeoutMs ?? 60000,
     });
 
-    const id = cachePut('crawl', result);
+    const issues = (result.pages || []).flatMap((p) => (p.issues || []).map((i) => ({
+      rule: i.rule || i.id,
+      section: '—',
+      severity: i.severity,
+    })));
+    const id = session.put('crawl', result, {
+      url,
+      score: result.aggregate ? result.aggregate.avgScore : null,
+      issueCount: issues.length,
+      issues,
+    });
+
     return res.json({ ok: true, report: result, resultId: id });
   });
 
@@ -158,70 +178,115 @@ function createAuditRouter({ repos }) {
       delayMs: body.delayMs ?? 3000,
       timeout: body.timeoutMs ?? 60000,
     });
-    const id = cachePut('compare', result);
+    const issues = (result.sites || []).flatMap((s) => (s.topIssues || []).map((i) => ({
+      rule: i.rule || i.id,
+      section: '—',
+      severity: i.severity,
+    })));
+    const id = session.put('compare', result, {
+      url: result.target.url,
+      score: result.target.avgSectionScore,
+      issueCount: issues.length,
+      issues,
+    });
     return res.json({ ok: true, report: result, resultId: id });
+  });
+
+  // --------------------------------------------------------- лог сессии
+  router.get('/api/session', (_req, res) => {
+    res.json({ ok: true, operations: session.listOperations() });
   });
 
   // ------------------------------------------------------------------ PDF
   router.get('/api/report/pdf', validateQuery(pdfQuerySchema), async (req, res) => {
     const { type, id } = req.valid;
-    const entry = cache.get(id);
+
+    if (type === 'session') {
+      const ops = session.listOperations();
+      if (!ops.length) {
+        throw new HttpError(404, 'NOT_FOUND', 'В этой сессии ещё не было проверок');
+      }
+      const tmp = tmpPath('session');
+      try {
+        await generateSessionPdf(ops, tmp);
+        return sendPdf(res, tmp, fileName('session', 'session'));
+      } finally {
+        cleanup(tmp);
+      }
+    }
+
+    if (!id) {
+      throw new HttpError(400, 'BAD_REQUEST', 'Нужен id результата');
+    }
+    const entry = session.get(id);
     if (!entry) {
-      throw new HttpError(404, 'NOT_FOUND', 'Отчёт устарел — запустите аудит заново');
+      throw new HttpError(404, 'NOT_FOUND', 'Отчёт устарел или сервер перезапущен — выполните проверку заново');
     }
     if (entry.type !== type) {
-      throw new HttpError(400, 'BAD_REQUEST', 'Тип отчёта не совпадает');
+      throw new HttpError(400, 'BAD_REQUEST', 'Тип отчёта не совпадает с результатом');
     }
 
-    const os = require('os');
-    const path = require('path');
-    const fs = require('fs');
-    const tmp = path.join(os.tmpdir(), `owa-${type}-${Date.now()}.pdf`);
-
+    const tmp = tmpPath(type);
     try {
       if (type === 'audit') {
-        // Отчёту нужен полный результат: восстанавливаем минимальный каркас.
-        const report = entry.result;
-        await generatePdfReport(toPdfAuditResult(report), tmp);
-      } else {
+        await generatePdfReport(entry.result, tmp);
+      } else if (type === 'compare') {
         await generateComparePdf(entry.result, tmp);
+      } else if (type === 'crawl') {
+        await generateCrawlPdf(entry.result, tmp);
+      } else {
+        await generateAnalysisPdf(entry.result, tmp);
       }
-      const buffer = fs.readFileSync(tmp);
-      res.set('Content-Type', 'application/pdf');
-      res.set('Content-Disposition', `attachment; filename="owa-${type}.pdf"`);
-      return res.send(buffer);
+      return sendPdf(res, tmp, fileName(type, entry.result && entry.result.url));
     } finally {
-      fs.unlink(tmp, () => {});
+      cleanup(tmp);
+    }
+  });
+
+  // ------------------------------------------------- PDF по записи истории
+  router.get('/api/history/:id/pdf', validateParams(idParamSchema), async (req, res) => {
+    const analysis = repos.analyses.get(req.valid.id);
+    if (!analysis) {
+      throw new HttpError(404, 'NOT_FOUND', 'Анализ не найден');
+    }
+    const tmp = tmpPath('history');
+    try {
+      if (analysis.status === 'audit' && analysis.interpretation && analysis.interpretation.audit) {
+        await generatePdfReport(analysis.interpretation.audit, tmp);
+      } else {
+        // Запись performance-анализа: собираем полный отчёт из БД.
+        await generateAnalysisPdf({
+          metrics: analysis.metrics,
+          meta: { url: analysis.url, analyzedAt: new Date(analysis.createdAt).toISOString() },
+          interpretation: analysis.interpretation || { summary: { score: 0, headline: '' }, findings: [] },
+        }, tmp);
+      }
+      return sendPdf(res, tmp, fileName('history', analysis.url));
+    } finally {
+      cleanup(tmp);
     }
   });
 
   return router;
 }
 
-/** Собрать результат в формате, который понимает генератор обычного PDF. */
-function toPdfAuditResult(slim) {
-  const scores = {};
-  const issues = [];
-  for (const [name, sec] of Object.entries(slim.scores || {})) {
-    scores[name] = {
-      status: sec.status,
-      score: sec.score,
-      issues: sec.issues || [],
-      durationMs: sec.durationMs,
-      raw: name === 'performance' ? { metrics: slim.metrics || {} } : {},
-    };
-    for (const i of sec.issues || []) issues.push(i);
-  }
-  return {
-    schemaVersion: 2,
-    tool: 'owa',
-    url: slim.url,
-    timestamp: slim.timestamp,
-    integralScore: slim.integralScore,
-    scores,
-    issues,
-    failedSections: slim.failedSections || [],
-  };
+const os = require('os');
+const nodePath = require('path');
+const fs = require('fs');
+
+function tmpPath(type) {
+  return nodePath.join(os.tmpdir(), `owa-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`);
 }
 
-module.exports = { createAuditRouter, slimAudit, cachePut };
+function cleanup(file) {
+  try { fs.unlinkSync(file); } catch { /* уже удалён */ }
+}
+
+function sendPdf(res, file, name) {
+  const buffer = fs.readFileSync(file);
+  res.set('Content-Type', 'application/pdf');
+  res.set('Content-Disposition', `attachment; filename="${name}"`);
+  return res.send(buffer);
+}
+
+module.exports = { createAuditRouter, slimAudit, fileName };

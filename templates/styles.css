@@ -2,7 +2,7 @@
    Шрифты — только стандартные (Helvetica/Arial), чтобы не съезжали
    в Adobe Reader и в браузере: кастомные шрифты требуют встраивания. */
 
-@page { size: A4; margin: 16mm 14mm 18mm; }
+@page { size: A4; margin: 16mm 14mm 16mm; }
 
 * { box-sizing: border-box; }
 
@@ -81,10 +81,14 @@ td.num { text-align: right; font-family: "Courier New", monospace; }
 .chart img { max-width: 100%; }
 .chart .caption { font-size: 8.5pt; color: #6b7280; margin-top: 4px; }
 
+/* Футер — обычный блок в конце документа.
+   position:fixed в PDF повторялся на каждой странице и ложился
+   поверх основного текста отчёта. */
 .footer {
-  position: fixed; bottom: -8mm; left: 0; right: 0;
+  margin-top: 18px;
   border-top: 1px solid #e6e8eb; padding-top: 5px;
   font-size: 8pt; color: #8b929b; display: flex; justify-content: space-between;
+  page-break-inside: avoid;
 }
 .disclaimer { font-size: 8.5pt; color: #6b7280; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e6e8eb; }
 .page-break { page-break-before: always; }
