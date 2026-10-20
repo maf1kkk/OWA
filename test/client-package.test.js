@@ -124,7 +124,8 @@ test('выжимка: HTML собирается без плейсхолдеро�
   assert.ok(html.includes('Сравнение с конкурентами'), 'сравнение');
 });
 
-test('полный отчёт: брендинг подставляется в титул и футер', () => {
+test('полный отчёт: брендинг подставляется в титул и в футер PDF', () => {
+  const { buildFooterTemplate } = require('../src/report/full-pdf');
   const html = buildFullHtml({
     facts: FACTS,
     narrative: NARRATIVE,
@@ -132,6 +133,10 @@ test('полный отчёт: брендинг подставляется в т
     charts: { compare: null },
   });
   assert.ok(!/__[A-Z_]+__/.test(html), 'плейсхолдеров не осталось');
-  assert.ok(html.includes('Аудит site.test'), 'футер с брендингом');
-  assert.ok(!html.includes('OWA — комплексный аудит сайта'), 'дефолтный футер заменён');
+  assert.ok(html.includes('ООО «Тест»'), 'заказчик в титуле');
+  assert.ok(html.includes('Исполнитель'), 'исполнитель в титуле');
+  // Футер рисует Chromium (нумерация страниц) — он собирается отдельно.
+  const footer = buildFooterTemplate({ footerLeft: 'Аудит site.test', contacts: '@test' });
+  assert.ok(footer.includes('Аудит site.test'), 'брендинг в футере');
+  assert.ok(footer.includes('pageNumber') && footer.includes('totalPages'), 'нумерация страниц');
 });

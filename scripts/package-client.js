@@ -31,13 +31,24 @@ if (!dataPath || !outDir) {
   process.exit(2);
 }
 
-// Реквизиты клиента (для брендинга и сметы).
+// Реквизиты клиента: из профиля clients/<slug>.json или из аргументов.
+const clientSlug = arg('client', '');
+let profile = null;
+if (clientSlug) {
+  const file = path.join(__dirname, '..', 'clients', clientSlug.endsWith('.json') ? clientSlug : clientSlug + '.json');
+  if (!fs.existsSync(file)) {
+    console.error('Профиль клиента не найден: ' + file);
+    process.exit(2);
+  }
+  profile = JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
 const client = {
-  name: arg('client-name', ''),
-  siteUrl: arg('client-site', ''),
-  contacts: arg('contacts', ''),
-  executor: arg('executor', 'Максим Устименко'),
-  priceBudget: arg('price', '20 000 ₽'),
+  name: arg('client-name', profile && profile.name ? profile.name : ''),
+  siteUrl: arg('client-site', profile && profile.siteUrl ? profile.siteUrl : ''),
+  contacts: arg('contacts', profile && profile.contacts ? profile.contacts : ''),
+  executor: arg('executor', profile && profile.executor ? profile.executor : 'Максим Устименко'),
+  priceBudget: arg('price', profile && profile.priceBudget ? profile.priceBudget : '20 000 ₽'),
 };
 
 const payload = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
@@ -74,7 +85,7 @@ const branding = {
     nextStep: 'Полный отчёт по ' + (facts.crawl ? facts.crawl.pageCount : 1) + ' страницам (разбивка находок по частоте, худшие страницы, безопасность, сравнение с конкурентами, план работ на 3 месяца с критериями приёмки) — 10–14 страниц, 2–3 рабочих дня. Готовлю сразу после вашего подтверждения.',
   }, summaryPath);
 
-  await generateFullPdf({ facts, narrative, branding }, fullPath);
+  await generateFullPdf({ facts, narrative, branding, profile }, fullPath);
 
   console.log('Пакет собран: ' + outDir);
   for (const f of fs.readdirSync(outDir)) {

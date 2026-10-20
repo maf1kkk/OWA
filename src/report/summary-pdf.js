@@ -109,6 +109,18 @@ function planRows(narrative) {
 }
 
 /**
+ * Нижний колонтитул PDF: брендинг слева, нумерация страниц справа.
+ */
+function buildFooterTemplate(branding) {
+  const left = esc(branding.footerLeft || 'Анализ сайта');
+  const right = esc(branding.contacts || '');
+  return '<div style="width:100%;font-size:8px;color:#8b929b;padding:0 12mm;display:flex;justify-content:space-between;font-family:Helvetica,Arial,sans-serif;">'
+    + '<span>' + left + (right ? ' · ' + right : '') + '</span>'
+    + '<span>стр. <span class="pageNumber"></span> из <span class="totalPages"></span></span>'
+    + '</div>';
+}
+
+/**
  * Собрать HTML выжимки.
  * @param {object} args
  * @param {object} args.facts
@@ -167,8 +179,15 @@ function buildSummaryHtml(args) {
  * @param {string} outPath
  */
 async function generateSummaryPdf(args, outPath) {
+  const b = Object.assign({
+    title: 'Анализ сайта',
+    client: '',
+    executor: 'OWA · One-Click Web Analyzer',
+    contacts: '',
+    footerLeft: 'Анализ сайта',
+  }, args.branding || {});
   const html = buildSummaryHtml(args);
-  return renderPdf(html, outPath);
+  return renderPdf(html, outPath, { footerTemplate: buildFooterTemplate(b) });
 }
 
-module.exports = { generateSummaryPdf, buildSummaryHtml };
+module.exports = { generateSummaryPdf, buildSummaryHtml, buildFooterTemplate };

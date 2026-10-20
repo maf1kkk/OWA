@@ -231,11 +231,71 @@ function defaultBranding(facts) {
 }
 
 /**
+ * Нижний колонтитул PDF: брендинг слева, нумерация страниц справа.
+ * Рендерится самим Chromium (displayHeaderFooter) — колонтитул есть на каждой
+ * странице, включая титуль, и не наезжает на текст.
+ */
+function buildFooterTemplate(branding) {
+  const left = esc(branding.footerLeft || 'Комплексный аудит сайта');
+  const right = esc(branding.contacts || '');
+  return '<div style="width:100%;font-size:8px;color:#8b929b;padding:0 12mm;display:flex;justify-content:space-between;font-family:Helvetica,Arial,sans-serif;">'
+    + '<span>' + left + (right ? ' · ' + right : '') + '</span>'
+    + '<span>стр. <span class="pageNumber"></span> из <span class="totalPages"></span></span>'
+    + '</div>';
+}
+
+/**
+ * Методика проверки: что, чем и в каких границах делалось.
+ * Формируется из фактов, а не из констант.
+ */
+function methodologyBlock(facts) {
+  const pages = facts.crawl ? facts.crawl.pageCount : 1;
+  const checks = [
+    ['Производительность', 'Core Web Vitals (LCP, CLS, FCP, TTFB, TBT), Long Tasks, количество и вес ресурсов, водопад загрузки, JS-ошибки'],
+    ['SEO', 'title, description, canonical, Open Graph, структура заголовков, alt-тексты, битые внутренние ссылки, robots.txt'],
+    ['Безопасность', 'HTTP-заголовки (CSP, HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy), экспонированные файлы и конфиги, открытые тяжёлые эндпоинты, TLS'],
+    ['Доступность', 'axe-core: контраст, доступные имена, порядок заголовков, лендмарки, подписи полей, alt-тексты (WCAG 2.1 AA / ГОСТ Р 52872-2019)'],
+    ['Контент', 'пустые ссылки, дубли заголовков, длина title, структурированные данные, объём текста'],
+  ];
+  const rows = checks.map(([name, what]) => '<tr><td style="width:150px">' + esc(name) + '</td><td>' + esc(what) + '</td></tr>').join('\n');
+
+  return '<h2>Методика проверки</h2>'
+    + '<table><tr><th>Раздел</th><th>Что проверялось</th></tr>' + rows + '</table>'
+    + '<p style="font-size:9pt;color:#6b7280">Инструменты: OWA (headless Chromium: Performance API, axe-core, обход сайта), '
+    + 'проверка HTTP-заголовков и TLS. Объём: ' + pages + ' ' + (pages === 1 ? 'страница' : 'страниц') + ' сайта. '
+    + 'Проверка выполнялась ' + esc(String(facts.date || '').slice(0, 10)) + ' с внешнего узла, без доступа к админке и коду сайта.</p>';
+}
+
+/**
+ * Блок «условия и следующие шаги» в конце отчёта (по профилю клиента).
+ * @param {object} profile — профиль клиента (clients/<slug>.json)
+ */
+function nextStepsBlock(profile) {
+  if (!profile) return '';
+  const steps = Array.isArray(profile.nextSteps) ? profile.nextSteps : [];
+  if (!steps.length) return '';
+  let html = '<h2>Варианты работ и условия</h2><ul style="margin:0 0 10px 18px">';
+  for (const s of steps) html += '<li>' + esc(s) + '</li>';
+  html += '</ul>';
+  if (profile.payment) {
+    html += '<p><b>Оплата:</b> ' + esc(profile.payment) + '</p>';
+  }
+  if (profile.notIncluded) {
+    html += '<p><b>Не входит в объём:</b> ' + esc(profile.notIncluded) + '</p>';
+  }
+  if (profile.guarantee) {
+    html += '<p><b>Гарантии:</b> ' + esc(profile.guarantee) + '</p>';
+  }
+  return html;
+}
+
+/**
  * Собрать HTML полного отчёта.
  * @param {object} args
  * @param {object} args.facts — факт-лист (buildFullFacts)
  * @param {object} args.narrative — текст (резюме + план)
  * @param {object} [args.branding] — брендинг
+ * @param {object} [args.profile] — профиль клиента (условия работ)
  */
 function buildFullHtml(args) {
   const { facts, narrative } = args;
@@ -297,6 +357,8 @@ function buildFullHtml(args) {
     .replace('__COMPARE_CHART__', args.charts && args.charts.compare ? args.charts.compare : '')
     .replace('__FINDINGS__', findingsBlock(facts))
     .replace('__LIMITATIONS__', limitations)
+    .replace('__METHODOLOGY__', methodologyBlock(facts))
+    .replace('__NEXT_STEPS__', nextStepsBlock(args.profile))
     .replace('__FOOTER_LEFT__', esc(b.footerLeft))
     .replace('__FOOTER_RIGHT__', esc(b.contacts || facts.url));
 }
@@ -307,11 +369,28 @@ function buildFullHtml(args) {
  * @param {object} args.facts
  * @param {object} args.narrative
  * @param {string} outPath
+ * @param {object} [args.branding]
+ * @param {string} [args.nextSteps] — блок «условия и следующие шаги»
  */
 async function generateFullPdf(args, outPath) {
   const charts = { compare: await compareChartPng(args.facts) };
-  const html = buildFullHtml({ facts: args.facts, narrative: args.narrative, charts });
-  return renderPdf(html, outPath);
+  const b = Object.assign(defaultBranding(args.facts), args.branding || {});
+  const html = buildFullHtml({
+    facts: args.facts,
+    narrative: args.narrative,
+    charts,
+    branding: b,
+    profile: args.profile,
+  });
+  return renderPdf(html, outPath, { footerTemplate: buildFooterTemplate(b) });
 }
 
-module.exports = { generateFullPdf, buildFullHtml, compareChartPng, SECTION_LABELS };
+module.exports = {
+  generateFullPdf,
+  buildFullHtml,
+  compareChartPng,
+  buildFooterTemplate,
+  methodologyBlock,
+  nextStepsBlock,
+  SECTION_LABELS,
+};

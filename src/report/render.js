@@ -16,9 +16,11 @@ const MAX_PDF_BYTES = 10 * 1024 * 1024;
  * Отрисовать HTML в PDF-файл.
  * @param {string} html
  * @param {string} outPath
+ * @param {object} [opts]
+ * @param {string} [opts.footerTemplate] — нижний колонтитул Chromium (нумерация страниц)
  * @returns {Promise<{path: string, bytes: number}>}
  */
-async function renderPdf(html, outPath) {
+async function renderPdf(html, outPath, opts = {}) {
   const browser = await launchBrowser(true);
   try {
     const context = await browser.newContext();
@@ -27,8 +29,10 @@ async function renderPdf(html, outPath) {
     const buffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '14mm', bottom: '14mm', left: '12mm', right: '12mm' },
-      displayHeaderFooter: false,
+      margin: { top: '14mm', bottom: '18mm', left: '12mm', right: '12mm' },
+      displayHeaderFooter: !!opts.footerTemplate,
+      headerTemplate: '<div></div>',
+      ...(opts.footerTemplate ? { footerTemplate: opts.footerTemplate } : {}),
     });
     await context.close();
 
