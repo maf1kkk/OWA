@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>OWA — Полный отчёт по сайту</title>
+<style>__STYLES__</style>
+</head>
+<body>
+  <div class="cover">
+    <div class="brand">OWA · One-Click Web Analyzer</div>
+    <h1 class="compare-title">Комплексный аудит сайта</h1>
+    <div class="url">__URL__</div>
+    <div class="date">Дата: __DATE_LONG__ · страниц проверено: __PAGE_COUNT__ · разделов аудита: 5</div>
+
+    <div class="score-hero" style="justify-content:center; margin-top:24px">
+      <div class="big __SCORE_CLASS__">__INTEGRAL_SCORE__</div>
+      <div class="meta"><b>Интегральная оценка</b><div style="margin-top:4px">__SCORE_LEGEND__</div></div>
+    </div>
+
+    <div class="section-scores">
+      __SECTION_CARDS__
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>Резюме для руководства</h2>
+  <p>__SUMMARY__</p>
+  <ul style="margin:0 0 10px 18px">
+    __FOCUS__
+  </ul>
+
+  <h2>План работ на 3 месяца</h2>
+  <table>
+    <tr><th style="width:60px">Месяц</th><th>Что сделать</th><th>Зачем</th><th>Ожидаемый эффект</th><th style="width:60px">Трудоёмкость</th></tr>
+    __PLAN_ROWS__
+  </table>
+
+  <h2>Ключевые метрики</h2>
+  <table class="vitals-table">
+    <tr><th style="width:16px"></th><th>Метрика</th><th style="text-align:right">Значение</th><th>Порог Good</th><th>Порог Poor</th><th>Оценка</th></tr>
+    __VITALS_ROWS__
+  </table>
+
+  <h2>Средние метрики по сайту</h2>
+  <table>
+    <tr><th>Метрика</th><th style="text-align:right">Среднее по сайту</th><th>Оценка</th></tr>
+    __AVG_ROWS__
+  </table>
+
+  <div class="page-break"></div>
+
+  <h2>Оценки по разделам аудита</h2>
+  <table>
+    <tr><th>Раздел</th><th style="text-align:right">Оценка</th><th style="text-align:right">Проблем</th><th>Ключевые находки</th></tr>
+    __SECTION_ROWS__
+  </table>
+
+  <h2>Проблемы по частоте (сколько страниц затронуто)</h2>
+  <table>
+    <tr><th>Правило</th><th>Уровень</th><th style="text-align:right">Страниц</th></tr>
+    __TOP_ISSUES__
+  </table>
+
+  <h2>Страницы с худшими показателями</h2>
+  <table>
+    <tr><th>URL</th><th style="text-align:right">Оценка</th></tr>
+    __WORST_PAGES__
+  </table>
+
+  <h2>Безопасность</h2>
+  __SECURITY__
+
+  <div class="page-break"></div>
+
+  <h2>Сравнение с конкурентами</h2>
+  __COMPARE_TABLE__
+  <div class="chart">
+    <img src="__COMPARE_CHART__" alt="Оценки по разделам: сайт и конкуренты">
+    <div class="caption">Оценки по разделам аудита: ваш сайт против конкурентов</div>
+  </div>
+
+  <h2>Найденные проблемы (детально)</h2>
+  __FINDINGS__
+
+  <h2>Ограничения проверки</h2>
+  <ul style="margin:0 0 10px 18px">
+    __LIMITATIONS__
+  </ul>
+
+  <div class="disclaimer">
+    Отчёт сформирован автоматически инструментом OWA на основе фактических измерений
+    в headless Chromium (Performance API, axe-core, обход сайта). Все числа в отчёте —
+    результат измерений. Оценки отражают состояние сайта на момент проверки и носят
+    рекомендательный характер.
+  </div>
+
+  <div class="footer">
+    <span>OWA — комплексный аудит сайта</span>
+    <span>__URL_SHORT__ · __DATE_SHORT__</span>
+  </div>
+</body>
+</html>

@@ -182,14 +182,53 @@ function extractNumbers(text) {
   return out;
 }
 
-/** Число допустимо, если совпадает с фактом (с допуском мс↔с). */
-function numberAllowed(value, allowed) {
+/**
+ * Производные числа, допустимые в тексте: разности, средние, отношения.
+ *
+ * Модель естественно пишет «на 9 баллов отстаёте» или «в 3 раза больше» —
+ * это арифметика над фактами, а не выдумка. Такие числа разрешаем, всё
+ * остальное (произвольные цифры) — по-прежнему отклоняется.
+ *
+ * @param {Iterable<number>} factNumbers — числа из фактов
+ * @returns {Set<number>}
+ */
+function deriveAllowedNumbers(factNumbers) {
+  const nums = [...factNumbers].filter((n) => Number.isFinite(n));
+  const derived = new Set();
+  const add = (v) => {
+    if (Number.isFinite(v)) derived.add(Math.round(v * 1000) / 1000);
+  };
+  for (let i = 0; i < nums.length; i++) {
+    for (let j = i + 1; j < nums.length; j++) {
+      const a = nums[i];
+      const b = nums[j];
+      add(Math.abs(a - b));
+      add((a + b) / 2);
+      if (b !== 0) add(Math.abs(a / b));
+      if (a !== 0) add(Math.abs(b / a));
+      if (b !== 0) add(Math.abs(a / b) * 100);
+      if (a !== 0) add(Math.abs(b / a) * 100);
+    }
+  }
+  return derived;
+}
+
+/**
+ * Число допустимо, если совпадает с фактом (с допуском мс↔с)
+ * или выводится из фактов арифметически.
+ */
+function numberAllowed(value, allowed, derived = null) {
   const near = (target) => {
     for (const a of allowed) {
       if (Math.abs(a - target) < 0.001) return true;
       if (target !== 0 && Math.abs(a - target / 1000) < 0.001) return true; // мс -> с
       if (a !== 0 && Math.abs(a / 1000 - target) < 0.001) return true;    // с -> мс
       if (a !== 0 && Math.abs(a * 100 - target) < 0.01) return true;     // проценты
+    }
+    if (derived) {
+      for (const d of derived) {
+        if (Math.abs(d - target) < 0.01) return true;
+      }
     }
     return false;
   };
@@ -435,6 +474,7 @@ module.exports = {
   buildMessages,
   buildFallbackNarrative,
   collectAllowedNumbers,
+  deriveAllowedNumbers,
   validateNarrative,
   parseModelJson,
   extractNumbers,

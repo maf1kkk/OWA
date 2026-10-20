@@ -56,6 +56,8 @@ function parseArgs(argv) {
       case '--max-depth': args.maxDepth = parseInt(argv[++i], 10); break;
       case '--delay': args.delay = parseInt(argv[++i], 10); break;
       case '--concurrency': args.concurrency = parseInt(argv[++i], 10); break;
+      case '--full': args.full = true; break;
+      case '--pages': args.pages = parseInt(argv[++i], 10); break;
       case '--target': args.target = argv[++i]; break;
       case '--with': args.with = argv[++i]; break;
       case '--ai': args.ai = true; break;
@@ -427,6 +429,67 @@ if (command === 'audit' || command === 'report') {
 
       // report --pdf
       const { generatePdfReport } = require('../src/report/pdf');
+
+      if (args.full) {
+        // Полный отчёт: аудит + обход + безопасность + сравнение + план.
+        const { runFullAudit } = require('../src/audit');
+        const { crawlSite } = require('../src/crawl/crawler');
+        const { compareSites } = require('../src/compare');
+        const { buildFullFacts, generateFullNarrative } = require('../src/ai/full-narrative');
+        const { generateFullPdf } = require('../src/report/full-pdf');
+
+        const audit = await runFullAudit(url, {
+          timeout: args.timeout ?? 60000,
+          waitAfterLoad: args.wait ?? 2500,
+        });
+
+        const crawl = args.pages === 0 ? null : await crawlSite(url, {
+          maxPages: args.pages ?? 40,
+          maxDepth: args.maxDepth ?? 3,
+          delayMs: args.delay ?? 250,
+          concurrency: args.concurrency ?? 3,
+          respectRobots: !args.ignoreRobots,
+        });
+
+        let scan = null;
+        try {
+          const { scanDos } = require('../local/dos-scan');
+          scan = await scanDos(url, { delayMs: 150, concurrency: 4 });
+        } catch (e) {
+          console.error('Сканер безопасности недоступен (локальный модуль не установлен) — раздел «Безопасность» будет сокращённым');
+        }
+
+        let compare = null;
+        if (args.with) {
+          const competitors = String(args.with).split(',').map((s) => s.trim()).filter(Boolean);
+          if (competitors.length) {
+            compare = await compareSites(url, competitors, {
+              delayMs: Math.max(3000, args.delay ?? 0),
+              timeout: args.timeout ?? 60000,
+            });
+          }
+        }
+
+        const facts = buildFullFacts({ audit, crawl, scan, compare });
+        const ai = args.ai ? require('../src/ai').getAi() : null;
+        const narrativeRes = await generateFullNarrative({
+          facts,
+          ai: ai && ai.configured ? ai : null,
+          profile: args.client ? require('../src/ai/client-profile').loadProfile(args.client) : null,
+          logger: (m) => console.error('[ai] ' + m),
+        });
+
+        const out = path.resolve(args.pdf || 'owa-full-report.pdf');
+        await generateFullPdf({ facts, narrative: narrativeRes.narrative }, out);
+        console.error(`Полный отчёт сохранён: ${out}`);
+        console.error(`Текст: ${narrativeRes.source}`);
+        if (args.out) {
+          fs.writeFileSync(path.resolve(args.out), JSON.stringify({ facts, narrative: narrativeRes.narrative }, null, 2), 'utf8');
+          console.error(`JSON сохранён: ${args.out}`);
+        }
+        process.exit(0);
+      }
+
       const result = await runFullAudit(url, {
         timeout: args.timeout ?? 60000,
         waitAfterLoad: args.wait ?? 2500,
