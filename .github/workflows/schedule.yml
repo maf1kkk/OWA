@@ -23,7 +23,7 @@ jobs:
       # История анализа хранится в SQLite — переносим базу между прогонами через артефакт,
       # иначе сравнение с предыдущим запуском не имеет смысла.
       - name: Скачать базу анализов из прошлого прогона
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: owa-db
           path: .
