@@ -78,7 +78,7 @@ jobs:
 
       - name: Сохранить базу анализов в артефакт
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: owa-db
           path: data/owa.db
